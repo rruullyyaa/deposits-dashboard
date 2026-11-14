@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Депозиты в работе · Factum Group Tracking</title>
+<style>
+:root{
+  --bg:#f9f9f7; --card:#fff; --line:#ecebe6; --line2:#f2f1ec;
+  --ink:#1d1d1b; --ink2:#55554f; --ink3:#8b8a83;
+  --blue:#3b6fd4; --blue-bg:#e8effc;
+  --green:#3e9b4f; --green-bg:#e6f4e8;
+  --amber:#d99a1e; --amber-bg:#fbf1dc;
+  --red:#d9542b; --red-bg:#fbe6de;
+  --r:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:18px 20px 60px}
+/* nav like example */
+.nav{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 18px}
+.brand{font-size:11px;letter-spacing:.12em;font-weight:600;color:var(--ink2);margin-right:10px}
+.nav a{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;color:var(--ink);text-decoration:none;font-weight:500}
+.nav a.on{background:var(--blue-bg)}
+.nav svg{width:15px;height:15px}
+.head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin:26px 0 16px;flex-wrap:wrap}
+.eyebrow{font-size:11px;letter-spacing:.12em;font-weight:600;color:var(--ink2)}
+h1{font-size:26px;margin:4px 0 2px;letter-spacing:-.01em}
+.sub{color:var(--ink2)}
+.fresh{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 16px;min-width:250px}
+.fresh b{font-size:15px}
+.fresh .muted{font-size:12px}
+.muted{color:var(--ink3)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
+/* filters */
+.filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink2);font-weight:500}
+select,input[type=search]{font:inherit;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;color:var(--ink);width:100%}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 11px;cursor:pointer;font:inherit;font-size:13px;color:var(--ink)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+/* criteria tiles */
+.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0}
+.tile{cursor:pointer;transition:border-color .15s, box-shadow .15s;position:relative}
+.tile:hover{border-color:#d6d4cc}
+.tile.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
+.tile .t-top{display:flex;justify-content:space-between;align-items:center}
+.tile .name{font-weight:600}
+.tile .big{font-size:30px;font-weight:700;letter-spacing:-.02em;margin:6px 0 2px}
+.tile .big small{font-size:14px;font-weight:500;color:var(--ink3);margin-left:4px}
+.bar{height:6px;background:var(--line2);border-radius:99px;overflow:hidden;margin:8px 0 10px}
+.bar i{display:block;height:100%;border-radius:99px}
+.seg{display:flex;gap:3px;flex-wrap:wrap;align-items:center}
+.seg span{font-size:12px;color:var(--ink3);margin-right:3px}
+.seg button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 7px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
+.seg button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px}
+.p-red{background:var(--red-bg);color:var(--red)} .p-amber{background:var(--amber-bg);color:#a06c08} .p-green{background:var(--green-bg);color:var(--green)}
+.opt{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);margin-top:8px;cursor:pointer}
+/* tabs */
+.tabs{display:flex;gap:6px;margin:22px 0 10px;align-items:center;flex-wrap:wrap}
+.tabs .sp{flex:1}
+/* tables */
+.tbl-wrap{overflow:auto;border-radius:var(--r);border:1px solid var(--line);background:#fff}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{position:sticky;top:0;background:#fbfbf9;text-align:left;font-weight:600;color:var(--ink2);font-size:12px;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;cursor:pointer;user-select:none}
+th.num,td.num{text-align:right}
+th .arr{color:var(--ink3);font-size:10px}
+td{padding:8px 10px;border-bottom:1px solid var(--line2);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:#fcfcfa}
+td a{color:var(--blue);text-decoration:none;font-weight:600}
+td a:hover{text-decoration:underline}
+.ago{display:inline-block;min-width:54px;text-align:center;padding:3px 8px;border-radius:8px;font-weight:600;font-variant-numeric:tabular-nums}
+.ok{background:var(--green-bg);color:var(--green)}
+.warn{background:var(--amber-bg);color:#a06c08}
+.bad{background:var(--red-bg);color:var(--red)}
+.none{background:var(--red-bg);color:var(--red);opacity:.85}
+.cnt{color:var(--ink3);font-size:11px;margin-left:5px;font-variant-numeric:tabular-nums}
+.stack{display:flex;flex-direction:column;align-items:flex-start;gap:2px}.stack .cnt{margin-left:2px}
+.stg{font-size:12px;color:var(--ink2)}
+.flags{display:flex;gap:3px}
+.flag{width:9px;height:9px;border-radius:3px;background:var(--green)}
+.flag.bad{background:var(--red)}
+.mgr-link{cursor:pointer;color:var(--ink);font-weight:600}
+.mgr-link:hover{color:var(--blue)}
+.small{font-size:12px}
+.note{margin-top:16px;font-size:12px;color:var(--ink2);line-height:1.55}
+.note b{color:var(--ink)}
+.legend{display:flex;gap:12px;align-items:center;font-size:12px;color:var(--ink2);flex-wrap:wrap}
+.legend .ago{min-width:auto;padding:1px 7px}
+.lock{display:none;position:fixed;inset:0;background:var(--bg);z-index:10;align-items:center;justify-content:center;padding:20px}
+.lock-card{width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px}
+.lock-card h2{margin:0;font-size:22px}.lock-card p{margin:0}
+.lock-card input[type=password]{font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.lock-card button{padding:10px;font-weight:600}
+.lock-err{color:var(--red);font-size:13px;min-height:1em}
+.empty{padding:30px;text-align:center;color:var(--ink3)}
+@media (max-width:1100px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:900px){.filters,.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.filters,.tiles{grid-template-columns:1fr}.brand{display:none}}
+</style>
+</head>
+<body>
+<div id="lock" class="lock"><form id="lockForm" class="card lock-card">
+  <div class="eyebrow">FACTUM GROUP TRACKING</div>
+  <h2>Депозиты в работе</h2>
+  <p class="muted">Введите пароль, чтобы открыть данные</p>
+  <input id="lockPass" type="password" placeholder="Пароль" autocomplete="current-password" autofocus>
+  <label class="opt"><input type="checkbox" id="lockRemember" checked> запомнить на этом устройстве</label>
+  <div id="lockErr" class="lock-err"></div>
+  <button class="chip on" type="submit">Открыть</button>
+</form></div>
+<div class="wrap">
+  <nav class="nav">
+    <span class="brand">FACTUM GROUP TRACKING</span>
+    <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Депозиты</a>
+  </nav>
+
+  <div class="head">
+    <div>
+      <div class="eyebrow">РАБОТА С ДЕПОЗИТАМИ</div>
+      <h1>Депозиты в работе</h1>
+      <div class="sub">Звонки, комментарии, подборы, торги и просчёты ремонта по каждому депозиту · Bitrix24, воронка «Default pipeline»</div>
+    </div>
+    <div class="fresh">
+      <div class="muted">Данные из Bitrix24 на</div>
+      <b id="genAt">—</b>
+      <div class="muted">обновление каждый час</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="filters">
+      <label class="f">Отдел<select id="fGrp"></select></label>
+      <label class="f">Офис<select id="fOffice"></select></label>
+      <label class="f">Менеджер<select id="fMgr"></select></label>
+      <label class="f">Поиск по № сделки<input id="fSearch" type="search" placeholder="например 327793"></label>
+    </div>
+    <div class="chips" id="fStages"></div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="tabs">
+    <button class="chip on" data-view="deals">Депозиты</button>
+    <button class="chip" data-view="mgrs">По менеджерам</button>
+    <button class="chip" data-view="offices">По офисам</button>
+    <span class="sp"></span>
+    <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
+  </div>
+
+  <div class="tbl-wrap"><table id="tbl"></table></div>
+
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+// ---------- загрузка данных: встроенные (превью) → data.enc.json (по паролю) → data.json
+const b64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function decrypt(pkg,pass){
+  const key0=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(pkg.salt),iterations:pkg.iter,hash:'SHA-256'},key0,{name:'AES-GCM',length:256},false,['decrypt']);
+  const plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64(pkg.iv)},key,b64(pkg.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
+function load(k){try{return localStorage.getItem(k)}catch(e){return null}}
+async function getData(){
+  if(DATA) return DATA;
+  let pkg=null;
+  try{ const r=await fetch('data.enc.json',{cache:'no-store'}); if(r.ok) pkg=await r.json(); }catch(e){}
+  if(!pkg){ const r=await fetch('data.json',{cache:'no-store'}); return r.json(); }
+  const saved=load('dep_pass');
+  if(saved){ try{ return await decrypt(pkg,saved); }catch(e){ store('dep_pass',null); } }
+  const lock=document.getElementById('lock'); lock.style.display='flex';
+  return new Promise(res=>{
+    document.getElementById('lockForm').onsubmit=async e=>{
+      e.preventDefault(); const pass=document.getElementById('lockPass').value;
+      try{ const d=await decrypt(pkg,pass); if(document.getElementById('lockRemember').checked) store('dep_pass',pass); lock.style.display='none'; res(d); }
+      catch(err){ document.getElementById('lockErr').textContent='Неверный пароль'; }
+    };
+  });
+}
+
+(async function(){
+let D;
+try{ D=await getData(); }catch(e){ document.getElementById('tbl').innerHTML='<tr><td class="empty">Не удалось загрузить данные</td></tr>'; return; }
+
+const DAY=86400000, NOW=D.generated;
+const SHORT={'4':'Торгуем','UC_23XX7W':'На возврате','5':'Двигаем по параметрам','6':'Близок к реализации'};
+const U=D.users, STG=Object.fromEntries(D.stages.map(s=>[s.id,s.name]));
+const CRIT=[
+  {k:'call', name:'Звонки', opts:[1,2,3,5,7,14], def:3, hint:'Последний звонок клиенту по сделке'},
+  {k:'com',  name:'Комментарии', opts:[1,2,3,5,7,14], def:3, hint:'Последний комментарий ответственного менеджера'},
+  {k:'sel',  name:'Подборы', opts:[3,5,7,10,14,30], def:7, hint:'Последнее сообщение со ссылкой на авто (Copart, IAAI, Manheim, Encar…)'},
+  {k:'torg', name:'Торги', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.2 Торги» по этому клиенту'},
+  {k:'calc', name:'Просчёты', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.1 Расчет ремонта США/Канада» по этому клиенту'},
+];
+const st={grp:'',office:'',mgr:'',q:'',stages:new Set(D.stages.map(s=>s.id)),thr:{},active:new Set(),view:'deals',onlyBad:false,talkOnly:false,sort:{deals:['bad',-1],mgrs:['bad',-1],offices:['bad',-1]}};
+CRIT.forEach(c=>st.thr[c.k]=c.def);
+
+const fmtDate=t=>new Date(t).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+document.getElementById('genAt').textContent=fmtDate(NOW)+' (Киев)';
+
+// ---- derived
+function lastOf(d,k){ if(k==='call') return st.talkOnly? d.call.lastTalk : d.call.last; return d[k].last; }
+function age(t){ return t==null? Infinity : (NOW-t)/DAY; }
+function isBad(d,k){ return age(lastOf(d,k)) >= st.thr[k]; }
+function cls(d,k){ const a=age(lastOf(d,k)); if(a===Infinity) return 'none'; if(a>=st.thr[k]) return 'bad'; if(a>=st.thr[k]*0.66) return 'warn'; return 'ok'; }
+function agoTxt(t){ if(t==null) return 'нет'; const a=(NOW-t)/DAY; if(a<1) return 'сегодня'; return Math.floor(a)+' дн'; }
+function n30(d,k){ return k==='call'? (st.talkOnly? d.call.talk30 : d.call.n30) : d[k].n30; }
+function badCount(d){ return CRIT.reduce((s,c)=>s+(isBad(d,c.k)?1:0),0); }
+
+// ---- filters UI
+const grpSel=document.getElementById('fGrp'), offSel=document.getElementById('fOffice'), mgrSel=document.getElementById('fMgr');
+function uniq(a){return [...new Set(a)].sort((x,y)=>x.localeCompare(y,'ru'))}
+function fillSelects(){
+  const mgrIds=uniq(D.deals.map(d=>String(d.m)));
+  const grps=uniq(mgrIds.map(id=>U[id].grp));
+  grpSel.innerHTML='<option value="">Все отделы</option>'+grps.map(g=>`<option ${g===st.grp?'selected':''}>${g}</option>`).join('');
+  const offs=uniq(mgrIds.filter(id=>!st.grp||U[id].grp===st.grp).map(id=>U[id].office));
+  if(st.office && !offs.includes(st.office)) st.office='';
+  offSel.innerHTML='<option value="">Все офисы</option>'+offs.map(o=>`<option ${o===st.office?'selected':''}>${o}</option>`).join('');
+  const ms=mgrIds.filter(id=>(!st.grp||U[id].grp===st.grp)&&(!st.office||U[id].office===st.office)).sort((a,b)=>U[a].n.localeCompare(U[b].n,'ru'));
+  if(st.mgr && !ms.includes(st.mgr)) st.mgr='';
+  mgrSel.innerHTML='<option value="">Все менеджеры</option>'+ms.map(id=>`<option value="${id}" ${id===st.mgr?'selected':''}>${U[id].n}</option>`).join('');
+}
+grpSel.onchange=e=>{st.grp=e.target.value;fillSelects();render()};
+offSel.onchange=e=>{st.office=e.target.value;fillSelects();render()};
+mgrSel.onchange=e=>{st.mgr=e.target.value;render()};
+document.getElementById('fSearch').oninput=e=>{st.q=e.target.value.trim();render()};
+document.getElementById('onlyBad').onchange=e=>{st.onlyBad=e.target.checked;render()};
+const stWrap=document.getElementById('fStages');
+function drawStages(){
+  stWrap.innerHTML='<span class="muted small" style="align-self:center;margin-right:4px">Стадии:</span>'+D.stages.map(s=>{
+    const n=D.deals.filter(d=>d.st===s.id).length;
+    return `<button class="chip ${st.stages.has(s.id)?'on':''}" data-s="${s.id}">${s.name} <span style="opacity:.6">${n}</span></button>`}).join('');
+  stWrap.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const id=b.dataset.s; if(st.stages.has(id)&&st.stages.size>1) st.stages.delete(id); else st.stages.add(id); drawStages(); render();});
+}
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{st.view=b.dataset.view;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));render();});
+
+function scoped(){
+  return D.deals.filter(d=>{const u=U[d.m];
+    return st.stages.has(d.st)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(d.m)===st.mgr)&&(!st.q||String(d.id).includes(st.q));});
+}
+function passesActive(d){ if(st.active.size){ for(const k of st.active) if(!isBad(d,k)) return false; return true;} return st.onlyBad? badCount(d)>0 : true; }
+
+// ---- tiles
+const tilesEl=document.getElementById('tiles');
+function drawTiles(rows){
+  tilesEl.innerHTML=CRIT.map(c=>{
+    const bad=rows.filter(d=>isBad(d,c.k)).length, tot=rows.length, pct=tot?Math.round(bad/tot*100):0;
+    const color=pct>=40?'var(--red)':pct>=20?'var(--amber)':'var(--green)';
+    const pill=pct>=40?'p-red':pct>=20?'p-amber':'p-green';
+    return `<div class="card tile ${st.active.has(c.k)?'on':''}" data-k="${c.k}" title="${c.hint}">
+      <div class="t-top"><span class="name">${c.name}</span><span class="pill ${pill}">${pct}%</span></div>
+      <div class="big">${bad}<small>из ${tot} без действия</small></div>
+      <div class="bar"><i style="width:${pct}%;background:${color}"></i></div>
+      <div class="seg"><span>не было ≥</span>${c.opts.map(o=>`<button data-k="${c.k}" data-v="${o}" class="${st.thr[c.k]===o?'on':''}">${o} дн</button>`).join('')}</div>
+      ${c.k==='call'?`<label class="opt"><input type="checkbox" id="talkOnly" ${st.talkOnly?'checked':''}> только разговоры от 30 с</label>`:''}
+    </div>`}).join('');
+  tilesEl.querySelectorAll('.tile').forEach(t=>t.onclick=e=>{
+    if(e.target.closest('.seg')||e.target.closest('.opt')) return;
+    const k=t.dataset.k; st.active.has(k)?st.active.delete(k):st.active.add(k); st.view='deals';
+    document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view==='deals')); render();});
+  tilesEl.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.thr[b.dataset.k]=+b.dataset.v;render();});
+  const to=document.getElementById('talkOnly'); if(to) to.onchange=e=>{st.talkOnly=e.target.checked;render();};
+}
+
+// ---- tables
+const tbl=document.getElementById('tbl');
+function sortRows(rows,key,dir,get){ return rows.sort((a,b)=>{const x=get(a,key),y=get(b,key); return (x<y?-1:x>y?1:0)*dir;}); }
+function th(view,key,label,num){ const [k,dir]=st.sort[view]; return `<th class="${num?'num':''}" data-sort="${key}">${label} <span class="arr">${k===key?(dir>0?'▲':'▼'):''}</span></th>`; }
+function bindSort(view){ tbl.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort; const s=st.sort[view]; st.sort[view]=[k, s[0]===k? -s[1] : -1]; render();}); }
+function cell(d,k){ const t=lastOf(d,k); return `<td title="${t?fmtDate(t):'нет с момента переноса в Bitrix'}"><div class="stack"><span class="ago ${cls(d,k)}">${agoTxt(t)}</span><span class="cnt">${n30(d,k)} за 30 дн</span></div></td>`; }
+
+function drawDeals(rows){
+  const get=(d,k)=>{ if(k==='bad') return badCount(d)*1e6 + Math.min(age(lastOf(d,'call')),999); if(k==='m') return U[d.m].n; if(k==='office') return U[d.m].office; if(k==='st') return D.stages.findIndex(s=>s.id===d.st); if(k==='inst') return age(d.mv); if(k==='id') return d.id; return -age(lastOf(d,k)); };
+  const [k,dir]=st.sort.deals; sortRows(rows,k,dir,get);
+  tbl.innerHTML=`<thead><tr>${th('deals','id','Сделка')}${th('deals','m','Менеджер')}${th('deals','office','Офис')}${th('deals','st','Стадия')}${th('deals','inst','В стадии',1)}${th('deals','call','Звонок')}${th('deals','com','Комментарий')}${th('deals','sel','Подбор')}${th('deals','torg','Торги')}${th('deals','calc','Просчёт')}${th('deals','bad','Просрочек')}</tr></thead>
+  <tbody>${rows.length?rows.map(d=>`<tr>
+    <td><a href="${D.portal}/crm/deal/details/${d.id}/" target="_blank" rel="noopener">#${d.id}</a></td>
+    <td><span class="mgr-link" data-m="${d.m}">${U[d.m].n}</span></td>
+    <td class="small">${U[d.m].office}</td>
+    <td class="stg" title="${STG[d.st]}">${SHORT[d.st]||STG[d.st]}</td>
+    <td class="num small">${Math.floor(age(d.mv))} дн</td>
+    ${cell(d,'call')}${cell(d,'com')}${cell(d,'sel')}${cell(d,'torg')}${cell(d,'calc')}
+    <td><div class="flags">${CRIT.map(c=>`<span class="flag ${isBad(d,c.k)?'bad':''}" title="${c.name}"></span>`).join('')}</div></td>
+  </tr>`).join(''):'<tr><td colspan="11" class="empty">Нет депозитов под эти условия</td></tr>'}</tbody>`;
+  bindSort('deals');
+  tbl.querySelectorAll('.mgr-link').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); render();});
+}
+
+function agg(rows,keyFn,labelFn){
+  const m=new Map();
+  rows.forEach(d=>{const k=keyFn(d); if(!m.has(k)) m.set(k,{k,label:labelFn(d),n:0,b:{call:0,com:0,sel:0,torg:0,calc:0},c:{call:0,com:0,sel:0,torg:0,calc:0},any:0}); const g=m.get(k); g.n++; let any=0;
+    CRIT.forEach(c=>{if(isBad(d,c.k)){g.b[c.k]++;any=1;} g.c[c.k]+=n30(d,c.k);}); g.any+=any;});
+  return [...m.values()];
+}
+function pctCell(g,k){ const p=g.n?g.b[k]/g.n:0; const c=p>=.4?'bad':p>=.2?'warn':'ok'; return `<td><div class="stack"><span class="ago ${c}">${g.b[k]} из ${g.n}</span><span class="cnt">${g.c[k]} за 30 дн</span></div></td>`; }
+function drawAgg(rows,view){
+  const groups = view==='mgrs' ? agg(rows,d=>String(d.m),d=>U[d.m].n) : agg(rows,d=>U[d.m].office,d=>U[d.m].office);
+  const get=(g,k)=>{ if(k==='label') return g.label; if(k==='n') return g.n; if(k==='bad') return g.any/g.n*1000+g.n/1000; if(k==='office') return U[g.k]?.office||''; return g.b[k]/g.n; };
+  const [k,dir]=st.sort[view]; sortRows(groups,k,dir,get);
+  tbl.innerHTML=`<thead><tr>${th(view,'label',view==='mgrs'?'Менеджер':'Офис')}${view==='mgrs'?th(view,'office','Офис'):''}${th(view,'n','Депозитов',1)}${th(view,'call','Без звонков')}${th(view,'com','Без комментариев')}${th(view,'sel','Без подборов')}${th(view,'torg','Без торгов')}${th(view,'calc','Без просчётов')}${th(view,'bad','Хоть одна просрочка',1)}</tr></thead>
+  <tbody>${groups.map(g=>`<tr>
+    <td>${view==='mgrs'?`<span class="mgr-link" data-m="${g.k}">${g.label}</span>`:`<span class="mgr-link" data-o="${g.k}">${g.label}</span>`}</td>
+    ${view==='mgrs'?`<td class="small">${U[g.k].office}</td>`:''}
+    <td class="num">${g.n}</td>
+    ${pctCell(g,'call')}${pctCell(g,'com')}${pctCell(g,'sel')}${pctCell(g,'torg')}${pctCell(g,'calc')}
+    <td class="num"><b>${Math.round(g.any/g.n*100)}%</b> <span class="cnt">${g.any} из ${g.n}</span></td></tr>`).join('')}</tbody>`;
+  bindSort(view);
+  tbl.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
+  tbl.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('mgrs');});
+}
+function setView(v){st.view=v;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view===v));render();}
+
+function render(){
+  const rows=scoped();
+  drawTiles(rows);
+  const shown=rows.filter(passesActive);
+  if(st.view==='deals') drawDeals(shown); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
+}
+
+document.getElementById('note').innerHTML=`
+  <div class="legend" style="margin-bottom:8px"><span><span class="ago ok">3 дн</span> в норме</span><span><span class="ago warn">5 дн</span> скоро порог</span><span><span class="ago bad">9 дн</span> дольше порога</span><span><span class="ago none">нет</span> ни разу</span><span>Клик по плитке — показать депозиты, где этого действия не было. Клик по менеджеру — его депозиты.</span></div>
+  <b>Как считается.</b> Депозит — сделка в стадиях «${D.stages.map(s=>s.name).join('», «')}». Звонки — звонки Ringostat, привязанные к сделке. Комментарии — комментарии ответственного менеджера (сообщения бота и очереди лидов не считаются). Подбор — комментарий в сделке со ссылкой на авто (Copart, IAAI, Manheim, Encar, Che168, bid.cars и др.).
+  Торги и просчёты ремонта — задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», привязанные к сделке, или с тем же лотом / VIN / телефоном клиента, что и в сделке.<br>
+  <b>Ограничения.</b> История в Bitrix24 начинается с переноса из amoCRM (около 20.09.2026), поэтому «нет» значит «нет с момента переноса». В ноябре к сделке привязаны лишь 60 из 267 задач в «1.2 Торги» и 44 из 461 в «1.1 Расчет ремонта», остальные сопоставлены по лоту, VIN и телефону — торги и просчёты могут быть недосчитаны. Чтобы считалось точно, такие задачи нужно ставить из карточки сделки.`;
+
+fillSelects(); drawStages(); render();
+})();
+</script>
+</body>
+</html>
