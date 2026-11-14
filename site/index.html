@@ -40,7 +40,7 @@ select,input[type=search]{font:inherit;border:1px solid var(--line);background:#
 .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 11px;cursor:pointer;font:inherit;font-size:13px;color:var(--ink)}
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 /* criteria tiles */
-.tiles{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:12px 0}
+.tiles{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:12px;margin:12px 0}
 .tile{cursor:pointer;transition:border-color .15s, box-shadow .15s;position:relative}
 .tile:hover{border-color:#d6d4cc}
 .tile.on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
@@ -97,6 +97,61 @@ details.note summary{cursor:pointer;font-weight:600;color:var(--ink);margin-bott
 .lock-card input[type=password]{font:inherit;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .lock-card button{padding:10px;font-weight:600}
 .lock-err{color:var(--red);font-size:13px;min-height:1em}
+/* v3: инструменты таблицы */
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin:0 0 10px}
+.tools .opt{margin:0}
+.cols{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.cols .lbl{font-size:12px;color:var(--ink3);margin-right:2px}
+.cols button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink3)}
+.cols button.on{background:var(--blue-bg);border-color:#c9d8f6;color:var(--ink)}
+.tools .sp{flex:1}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+.toast.show{opacity:1}
+.tbl-wrap{max-height:calc(100vh - 24px)}
+#tbl th{z-index:2}
+#tbl td:first-child,#tbl th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:1px 0 0 var(--line2)}
+#tbl th:first-child{background:#fbfbf9;z-index:3}
+#tbl tbody tr:hover td:first-child{background:#fcfcfa}
+td.deal{min-width:140px;max-width:200px}
+td.small{white-space:normal;min-width:100px}
+td.stg{white-space:normal;min-width:120px}
+.ttl{font-size:12px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:190px;margin-top:2px}
+tr.grp td{background:#f6f5f1;cursor:pointer;font-size:13px;padding:9px 10px;border-bottom:1px solid var(--line)}
+tr.grp td:first-child{background:#f6f5f1}
+tr.grp:hover td{background:#f0efea}
+tr.grp .caret{display:inline-block;width:14px;color:var(--ink3);transition:transform .15s}
+tr.grp.open .caret{transform:rotate(90deg)}
+tr.grp .gmeta{color:var(--ink2);margin-left:8px}
+.delta{display:inline-block;font-size:12px;font-weight:600;margin-left:6px}
+.delta.up{color:var(--red)} .delta.down{color:var(--green)} .delta.same{color:var(--ink3);font-weight:500}
+body.compact .stack .cnt{display:none}
+body.compact td{padding:4px 10px}
+body.compact .ago{padding:2px 7px}
+body.compact .ttl{display:none}
+@media (max-width:700px){
+  .tbl-wrap{max-height:none;border:0;background:transparent;overflow:visible}
+  #tbl,#tbl tbody,#tbl tr,#tbl td{display:block;width:100%}
+  #tbl thead{display:none}
+  #tbl tr{background:#fff;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;padding:10px 12px}
+  #tbl td{border:0;padding:2px 0;white-space:normal;position:static!important;box-shadow:none!important;background:transparent!important}
+  #tbl td.c{display:inline-block!important;width:auto!important;margin:4px 8px 0 0}
+  #tbl td.c .cnt{display:none}
+  #tbl td.meta{display:inline!important;width:auto!important;font-size:12px;color:var(--ink2)}
+  #tbl td.meta .mgr-link{font-weight:600}
+  #tbl td.meta::before{display:none!important}
+  #tbl td.meta+td.meta::before{content:' · '!important;display:inline!important;font-size:12px;color:var(--ink3)}
+  #tbl td.stg::after{content:'';display:block;height:2px}
+  #tbl td.flagcell{display:none!important}
+  #tbl td.deal{margin-bottom:2px}
+  #tbl td.c .stack{flex-direction:row;align-items:center;gap:4px}
+  #tbl td[data-l]::before{content:attr(data-l);display:block;font-size:11px;color:var(--ink3)}
+  #tbl td.c[data-l]::before{display:inline;margin-right:4px}
+  #tbl td.c .stack{display:inline-flex}
+  #tbl tr.grp{padding:8px 12px;background:#f6f5f1}
+  #tbl tr.grp td{background:transparent!important;padding:0}
+  td.deal{max-width:none}.ttl{max-width:none;white-space:normal}
+  .tabs .sp{display:none}
+}
 .empty{padding:30px;text-align:center;color:var(--ink3)}
 @media (max-width:1100px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.filters,.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -137,7 +192,7 @@ details.note summary{cursor:pointer;font-weight:600;color:var(--ink);margin-bott
       <label class="f">Отдел<select id="fGrp"></select></label>
       <label class="f">Офис<select id="fOffice"></select></label>
       <label class="f">Менеджер<select id="fMgr"></select></label>
-      <label class="f">Поиск по № сделки<input id="fSearch" type="search" placeholder="например 327793"></label>
+      <label class="f">Поиск: № или название сделки<input id="fSearch" type="search" placeholder="например 327793 или Tucson"></label>
     </div>
     <div class="chips" id="fStages"></div>
   </div>
@@ -153,7 +208,16 @@ details.note summary{cursor:pointer;font-weight:600;color:var(--ink);margin-bott
     <button class="chip" type="button" id="tblToggle"></button>
   </div>
 
+  <div class="tools" id="tools">
+    <label class="opt"><input type="checkbox" id="optGroup"> группировать по менеджерам</label>
+    <button class="chip" type="button" id="expandAll" style="display:none">Развернуть всех</button>
+    <label class="opt"><input type="checkbox" id="optCompact"> компактно</label>
+    <span class="cols" id="colsBox"></span>
+    <span class="sp"></span>
+    <button class="chip" type="button" id="copyBtn" title="Скопировать список просроченных депозитов для отправки в мессенджер">📋 Скопировать просрочки</button>
+  </div>
   <div class="tbl-wrap" id="tblWrap"><table id="tbl"></table></div>
+  <div class="toast" id="toast"></div>
 
   <details class="note" id="noteBox"><summary>Легенда и как считается</summary><div id="note"></div></details>
 </div>
@@ -196,14 +260,19 @@ const DAY=86400000, NOW=D.generated;
 const SHORT={'4':'Торгуем','UC_23XX7W':'На возврате','5':'Двигаем по параметрам','6':'Близок к реализации'};
 const U=D.users, STG=Object.fromEntries(D.stages.map(s=>[s.id,s.name]));
 const CRIT=[
-  {k:'call', name:'Звонки', opts:[1,2,3,5,7,14], def:3, hint:'Последний звонок клиенту по сделке'},
-  {k:'com',  name:'Комментарии', opts:[1,2,3,5,7,14], def:3, hint:'Последний комментарий ответственного менеджера'},
-  {k:'sel',  name:'Подборы', opts:[3,5,7,10,14,30], def:7, hint:'Последнее сообщение со ссылкой на авто (Copart, IAAI, Manheim, Encar…)'},
-  {k:'torg', name:'Торги', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.2 Торги» по этому клиенту'},
-  {k:'calc', name:'Просчёты', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.1 Расчет ремонта США/Канада» по этому клиенту'},
+  {k:'call', col:'Звонок', wo:'Без звонков', sh:'звонок', name:'Звонки', opts:[1,2,3,5,7,14], def:3, hint:'Последний звонок клиенту по сделке'},
+  {k:'com',  col:'Комментарий', wo:'Без комментариев', sh:'коммент.', name:'Комментарии', opts:[1,2,3,5,7,14], def:3, hint:'Последний комментарий ответственного менеджера'},
+  {k:'sel',  col:'Подбор', wo:'Без подборов', sh:'подбор', name:'Подборы', opts:[3,5,7,10,14,30], def:7, hint:'Последнее сообщение со ссылкой на авто (Copart, IAAI, Manheim, Encar…)'},
+  {k:'torg', col:'Торги', wo:'Без торгов', sh:'торги', name:'Торги', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.2 Торги» по этому клиенту'},
+  {k:'calc', col:'Просчёт', wo:'Без просчётов', sh:'просчёт', name:'Просчёты', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.1 Расчет ремонта США/Канада» по этому клиенту'},
 ];
 const st={grp:'',office:'',mgr:'',q:'',stages:new Set(D.stages.map(s=>s.id)),thr:{},active:new Set(),view:'deals',onlyBad:false,talkOnly:false,sort:{deals:['bad',-1],mgrs:['bad',-1],offices:['bad',-1]}};
 CRIT.forEach(c=>st.thr[c.k]=c.def);
+let savedCols=null; try{savedCols=JSON.parse(load('dep_cols'))}catch(e){}
+st.cols=new Set(Array.isArray(savedCols)&&savedCols.length?savedCols:CRIT.map(c=>c.k));
+st.group=load('dep_group')==='1'; st.compact=load('dep_compact')==='1'; st.open=new Set();
+const CV=()=>CRIT.filter(c=>st.cols.has(c.k));
+const esc=s=>String(s??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
 
 const fmtDate=t=>new Date(t).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 document.getElementById('genAt').textContent=fmtDate(NOW)+' (Киев)';
@@ -215,7 +284,7 @@ function isBad(d,k){ return age(lastOf(d,k)) >= st.thr[k]; }
 function cls(d,k){ const a=age(lastOf(d,k)); if(a===Infinity) return 'none'; if(a>=st.thr[k]) return 'bad'; if(a>=st.thr[k]*0.66) return 'warn'; return 'ok'; }
 function agoTxt(t){ if(t==null) return 'нет'; const a=(NOW-t)/DAY; if(a<1) return 'сегодня'; return Math.floor(a)+' дн'; }
 function n30(d,k){ return k==='call'? (st.talkOnly? d.call.talk30 : d.call.n30) : d[k].n30; }
-function badCount(d){ return CRIT.reduce((s,c)=>s+(isBad(d,c.k)?1:0),0); }
+function badCount(d){ return CV().reduce((s,c)=>s+(isBad(d,c.k)?1:0),0); }
 
 // ---- filters UI
 const grpSel=document.getElementById('fGrp'), offSel=document.getElementById('fOffice'), mgrSel=document.getElementById('fMgr');
@@ -247,20 +316,23 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{setTbl(true);
 
 function scoped(){
   return D.deals.filter(d=>{const u=U[d.m];
-    return st.stages.has(d.st)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(d.m)===st.mgr)&&(!st.q||String(d.id).includes(st.q));});
+    return st.stages.has(d.st)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(d.m)===st.mgr)&&(!st.q||String(d.id).includes(st.q)||(d.t||'').toLowerCase().includes(st.q.toLowerCase()));});
 }
 function passesActive(d){ if(st.active.size){ for(const k of st.active) if(!isBad(d,k)) return false; return true;} return st.onlyBad? badCount(d)>0 : true; }
 
 // ---- tiles
 const tilesEl=document.getElementById('tiles');
 function drawTiles(rows){
-  tilesEl.innerHTML=CRIT.map(c=>{
+  tilesEl.style.setProperty('--n',Math.min(CV().length,5));
+  tilesEl.innerHTML=CV().map(c=>{
     const bad=rows.filter(d=>isBad(d,c.k)).length, tot=rows.length, pct=tot?Math.round(bad/tot*100):0;
+    const pb=prevBad(c.k); let dl='';
+    if(pb!=null){ const df=bad-pb; dl=df>0?`<span class="delta up" title="Сравнение со снимком ${fmtDate(PREV.g)}">▲ ${df} к вчера</span>`:df<0?`<span class="delta down" title="Сравнение со снимком ${fmtDate(PREV.g)}">▼ ${-df} к вчера</span>`:`<span class="delta same" title="Сравнение со снимком ${fmtDate(PREV.g)}">= как вчера</span>`; }
     const color=pct>=40?'var(--red)':pct>=20?'var(--amber)':'var(--green)';
     const pill=pct>=40?'p-red':pct>=20?'p-amber':'p-green';
     return `<div class="card tile ${st.active.has(c.k)?'on':''}" data-k="${c.k}" title="${c.hint}">
       <div class="t-top"><span class="name">${c.name}</span><span class="pill ${pill}">${pct}%</span></div>
-      <div class="big">${bad}<small>из ${tot} без действия</small></div>
+      <div class="big">${bad}<small>из ${tot} без действия</small></div>${dl?`<div style="margin-top:-2px">${dl}</div>`:''}
       <div class="bar"><i style="width:${pct}%;background:${color}"></i></div>
       <div class="seg"><span>не было ≥</span>${c.opts.map(o=>`<button data-k="${c.k}" data-v="${o}" class="${st.thr[c.k]===o?'on':''}">${o} дн</button>`).join('')}</div>
       ${c.k==='call'?`<label class="opt"><input type="checkbox" id="talkOnly" ${st.talkOnly?'checked':''}> только разговоры от 30 с</label>`:''}
@@ -278,43 +350,59 @@ const tbl=document.getElementById('tbl');
 function sortRows(rows,key,dir,get){ return rows.sort((a,b)=>{const x=get(a,key),y=get(b,key); return (x<y?-1:x>y?1:0)*dir;}); }
 function th(view,key,label,num){ const [k,dir]=st.sort[view]; return `<th class="${num?'num':''}" data-sort="${key}">${label} <span class="arr">${k===key?(dir>0?'▲':'▼'):''}</span></th>`; }
 function bindSort(view){ tbl.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort; const s=st.sort[view]; st.sort[view]=[k, s[0]===k? -s[1] : -1]; render();}); }
-function cell(d,k){ const t=lastOf(d,k); return `<td title="${t?fmtDate(t):'нет с момента переноса в Bitrix'}"><div class="stack"><span class="ago ${cls(d,k)}">${agoTxt(t)}</span><span class="cnt">${n30(d,k)} за 30 дн</span></div></td>`; }
 
+function cell(d,k){ const c=CRIT.find(x=>x.k===k); const t=lastOf(d,k); return `<td class="c" data-l="${c.col}" title="${t?fmtDate(t):'нет с момента переноса в Bitrix'}"><div class="stack"><span class="ago ${cls(d,k)}">${agoTxt(t)}</span><span class="cnt">${n30(d,k)} за 30 дн</span></div></td>`; }
+function dealRow(d,grouped){
+  return `<tr>
+    <td class="deal"><a href="${D.portal}/crm/deal/details/${d.id}/" target="_blank" rel="noopener">#${d.id}</a>${d.t?`<div class="ttl" title="${esc(d.t)}">${esc(d.t)}</div>`:''}</td>
+    ${grouped?'':`<td class="meta" data-l="Менеджер"><span class="mgr-link" data-m="${d.m}">${esc(U[d.m].n)}</span></td>
+    <td class="small meta" data-l="Офис">${esc(U[d.m].office)}</td>`}
+    <td class="stg meta" data-l="Стадия" title="${STG[d.st]}">${SHORT[d.st]||STG[d.st]} · ${Math.floor(age(d.mv))} дн</td>
+    ${CV().map(c=>cell(d,c.k)).join('')}
+    <td class="flagcell" data-l="Просрочки"><div class="flags">${CV().map(c=>`<span class="flag ${isBad(d,c.k)?'bad':''}" title="${c.name}"></span>`).join('')}</div></td>
+  </tr>`;
+}
 function drawDeals(rows){
-  const get=(d,k)=>{ if(k==='bad') return badCount(d)*1e6 + Math.min(age(lastOf(d,'call')),999); if(k==='m') return U[d.m].n; if(k==='office') return U[d.m].office; if(k==='st') return D.stages.findIndex(s=>s.id===d.st); if(k==='inst') return age(d.mv); if(k==='id') return d.id; return -age(lastOf(d,k)); };
+  const get=(d,k)=>{ if(k==='bad') return badCount(d)*1e6 + Math.min(age(lastOf(d,'call')),999); if(k==='m') return U[d.m].n; if(k==='office') return U[d.m].office; if(k==='st') return D.stages.findIndex(s=>s.id===d.st)*1e4+age(d.mv); if(k==='id') return d.id; return -age(lastOf(d,k)); };
   const [k,dir]=st.sort.deals; sortRows(rows,k,dir,get);
-  tbl.innerHTML=`<thead><tr>${th('deals','id','Сделка')}${th('deals','m','Менеджер')}${th('deals','office','Офис')}${th('deals','st','Стадия')}${th('deals','inst','В стадии',1)}${th('deals','call','Звонок')}${th('deals','com','Комментарий')}${th('deals','sel','Подбор')}${th('deals','torg','Торги')}${th('deals','calc','Просчёт')}${th('deals','bad','Просрочек')}</tr></thead>
-  <tbody>${rows.length?rows.map(d=>`<tr>
-    <td><a href="${D.portal}/crm/deal/details/${d.id}/" target="_blank" rel="noopener">#${d.id}</a></td>
-    <td><span class="mgr-link" data-m="${d.m}">${U[d.m].n}</span></td>
-    <td class="small">${U[d.m].office}</td>
-    <td class="stg" title="${STG[d.st]}">${SHORT[d.st]||STG[d.st]}</td>
-    <td class="num small">${Math.floor(age(d.mv))} дн</td>
-    ${cell(d,'call')}${cell(d,'com')}${cell(d,'sel')}${cell(d,'torg')}${cell(d,'calc')}
-    <td><div class="flags">${CRIT.map(c=>`<span class="flag ${isBad(d,c.k)?'bad':''}" title="${c.name}"></span>`).join('')}</div></td>
-  </tr>`).join(''):'<tr><td colspan="11" class="empty">Нет депозитов под эти условия</td></tr>'}</tbody>`;
+  const ncol=(st.group?3:5)+CV().length;
+  const head=`<thead><tr>${th('deals','id','Сделка')}${st.group?'':th('deals','m','Менеджер')+th('deals','office','Офис')}${th('deals','st','Стадия · дней')}${CV().map(c=>th('deals',c.k,c.col)).join('')}${th('deals','bad','Итог')}</tr></thead>`;
+  let body='';
+  if(!rows.length) body=`<tr><td colspan="${ncol}" class="empty">Нет депозитов под эти условия</td></tr>`;
+  else if(st.group){
+    const groups=new Map(); rows.forEach(d=>{const g=String(d.m); if(!groups.has(g)) groups.set(g,[]); groups.get(g).push(d);});
+    const gl=[...groups.entries()].map(([m,list])=>({m,list,bad:list.filter(d=>badCount(d)>0).length}));
+    gl.sort((a,b)=>b.bad-a.bad||b.list.length-a.list.length||U[a.m].n.localeCompare(U[b.m].n,'ru'));
+    const autoOpen=gl.length===1;
+    body=gl.map(g=>{ const open=autoOpen||st.open.has(g.m);
+      const hdr=`<tr class="grp ${open?'open':''}" data-g="${g.m}"><td colspan="${ncol}"><span class="caret">▸</span><b>${esc(U[g.m].n)}</b><span class="gmeta">${esc(U[g.m].office)} · ${g.list.length} деп.</span> ${g.bad?`<span class="pill p-red" style="margin-left:6px">${g.bad} с просрочкой</span>`:`<span class="pill p-green" style="margin-left:6px">всё в норме</span>`}</td></tr>`;
+      return hdr+(open?g.list.map(d=>dealRow(d,true)).join(''):''); }).join('');
+  } else body=rows.map(d=>dealRow(d)).join('');
+  tbl.innerHTML=head+'<tbody>'+body+'</tbody>';
   bindSort('deals');
   tbl.querySelectorAll('.mgr-link').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); render();});
+  tbl.querySelectorAll('tr.grp').forEach(e=>e.onclick=()=>{const m=e.dataset.g; st.open.has(m)?st.open.delete(m):st.open.add(m); render();});
 }
 
 function agg(rows,keyFn,labelFn){
   const m=new Map();
   rows.forEach(d=>{const k=keyFn(d); if(!m.has(k)) m.set(k,{k,label:labelFn(d),n:0,b:{call:0,com:0,sel:0,torg:0,calc:0},c:{call:0,com:0,sel:0,torg:0,calc:0},any:0}); const g=m.get(k); g.n++; let any=0;
-    CRIT.forEach(c=>{if(isBad(d,c.k)){g.b[c.k]++;any=1;} g.c[c.k]+=n30(d,c.k);}); g.any+=any;});
+    CV().forEach(c=>{if(isBad(d,c.k)){g.b[c.k]++;any=1;} g.c[c.k]+=n30(d,c.k);}); g.any+=any;});
   return [...m.values()];
 }
-function pctCell(g,k){ const p=g.n?g.b[k]/g.n:0; const c=p>=.4?'bad':p>=.2?'warn':'ok'; return `<td><div class="stack"><span class="ago ${c}">${g.b[k]} из ${g.n}</span><span class="cnt">${g.c[k]} за 30 дн</span></div></td>`; }
+function pctCell(g,k){ const p=g.n?g.b[k]/g.n:0; const c=p>=.4?'bad':p>=.2?'warn':'ok'; return `<td class="c" data-l="${CRIT.find(x=>x.k===k).wo}"><div class="stack"><span class="ago ${c}">${g.b[k]} из ${g.n}</span><span class="cnt">${g.c[k]} за 30 дн</span></div></td>`; }
 function drawAgg(rows,view){
   const groups = view==='mgrs' ? agg(rows,d=>String(d.m),d=>U[d.m].n) : agg(rows,d=>U[d.m].office,d=>U[d.m].office);
   const get=(g,k)=>{ if(k==='label') return g.label; if(k==='n') return g.n; if(k==='bad') return g.any/g.n*1000+g.n/1000; if(k==='office') return U[g.k]?.office||''; return g.b[k]/g.n; };
   const [k,dir]=st.sort[view]; sortRows(groups,k,dir,get);
-  tbl.innerHTML=`<thead><tr>${th(view,'label',view==='mgrs'?'Менеджер':'Офис')}${view==='mgrs'?th(view,'office','Офис'):''}${th(view,'n','Депозитов',1)}${th(view,'call','Без звонков')}${th(view,'com','Без комментариев')}${th(view,'sel','Без подборов')}${th(view,'torg','Без торгов')}${th(view,'calc','Без просчётов')}${th(view,'bad','Хоть одна просрочка',1)}</tr></thead>
+  if(!groups.length){ tbl.innerHTML='<tbody><tr><td class="empty">Нет данных под эти условия</td></tr></tbody>'; return; }
+  tbl.innerHTML=`<thead><tr>${th(view,'label',view==='mgrs'?'Менеджер':'Офис')}${view==='mgrs'?th(view,'office','Офис'):''}${th(view,'n','Депозитов',1)}${CV().map(c=>th(view,c.k,c.wo)).join('')}${th(view,'bad','Хоть одна просрочка',1)}</tr></thead>
   <tbody>${groups.map(g=>`<tr>
     <td>${view==='mgrs'?`<span class="mgr-link" data-m="${g.k}">${g.label}</span>`:`<span class="mgr-link" data-o="${g.k}">${g.label}</span>`}</td>
-    ${view==='mgrs'?`<td class="small">${U[g.k].office}</td>`:''}
-    <td class="num">${g.n}</td>
-    ${pctCell(g,'call')}${pctCell(g,'com')}${pctCell(g,'sel')}${pctCell(g,'torg')}${pctCell(g,'calc')}
-    <td class="num"><b>${Math.round(g.any/g.n*100)}%</b> <span class="cnt">${g.any} из ${g.n}</span></td></tr>`).join('')}</tbody>`;
+    ${view==='mgrs'?`<td class="small" data-l="Офис">${U[g.k].office}</td>`:''}
+    <td class="num" data-l="Депозитов">${g.n}</td>
+    ${CV().map(c=>pctCell(g,c.k)).join('')}
+    <td class="num" data-l="Хоть одна просрочка"><b>${Math.round(g.any/g.n*100)}%</b> <span class="cnt">${g.any} из ${g.n}</span></td></tr>`).join('')}</tbody>`;
   bindSort(view);
   tbl.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
   tbl.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('mgrs');});
@@ -325,7 +413,52 @@ tblBtn.onclick=()=>setTbl(tblWrap.style.display==='none');
 setTbl(load('dep_tbl')!=='0');
 function setView(v){setTbl(true);st.view=v;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view===v));render();}
 
+// ---- история: снимок примерно сутки назад
+const HC={call:3,talk:4,com:5,sel:6,torg:7,calc:8};
+const PREV=(()=>{ const h=(D.hist||[]).filter(s=>s.g<NOW-12*3600000); if(!h.length) return null;
+  const target=NOW-24*3600000; let best=null; h.forEach(s=>{ if(Math.abs(s.g-target)<=4*3600000 && (!best||Math.abs(s.g-target)<Math.abs(best.g-target))) best=s; }); return best; })();
+function prevBad(k){
+  if(!PREV) return null; const col=k==='call'&&st.talkOnly?HC.talk:HC[k]; const ql=st.q.toLowerCase(); let n=0;
+  for(const x of PREV.x){ const [id,m,stg]=x; const u=U[m]||{grp:'',office:'—'};
+    if(!st.stages.has(stg)||(st.grp&&u.grp!==st.grp)||(st.office&&u.office!==st.office)||(st.mgr&&String(m)!==st.mgr)||(st.q&&!String(id).includes(st.q))) continue;
+    const h=x[col]; const a=h<0?Infinity:h/24; if(a>=st.thr[k]) n++; }
+  return n;
+}
+// ---- инструменты таблицы
+const colsBox=document.getElementById('colsBox');
+function drawCols(){
+  colsBox.innerHTML='<span class="lbl">Колонки:</span>'+CRIT.map(c=>`<button type="button" data-c="${c.k}" class="${st.cols.has(c.k)?'on':''}">${c.name}</button>`).join('');
+  colsBox.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{const k=b.dataset.c;
+    if(st.cols.has(k)){ if(st.cols.size===1) return; st.cols.delete(k); st.active.delete(k);} else st.cols.add(k);
+    store('dep_cols',JSON.stringify([...st.cols])); drawCols(); render();});
+}
+const optGroup=document.getElementById('optGroup'), optCompact=document.getElementById('optCompact'), expandAll=document.getElementById('expandAll');
+optGroup.checked=st.group; optCompact.checked=st.compact; document.body.classList.toggle('compact',st.compact);
+optGroup.onchange=e=>{st.group=e.target.checked; store('dep_group',st.group?'1':'0'); render();};
+optCompact.onchange=e=>{st.compact=e.target.checked; store('dep_compact',st.compact?'1':'0'); document.body.classList.toggle('compact',st.compact);};
+expandAll.onclick=()=>{ const ms=[...new Set(scoped().filter(passesActive).map(d=>String(d.m)))]; const allOpen=ms.every(m=>st.open.has(m)); st.open=allOpen?new Set():new Set(ms); render(); };
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2500); }
+async function copyText(txt){
+  try{ await navigator.clipboard.writeText(txt); return true; }catch(e){}
+  try{ const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); const ok=document.execCommand('copy'); ta.remove(); return ok; }catch(e){ return false; }
+}
+document.getElementById('copyBtn').onclick=async()=>{
+  const rows=scoped().filter(passesActive).filter(d=>badCount(d)>0);
+  if(!rows.length){ toast('Просроченных депозитов нет — копировать нечего'); return; }
+  const by=new Map(); rows.forEach(d=>{const m=String(d.m); if(!by.has(m)) by.set(m,[]); by.get(m).push(d);});
+  const thr=CV().map(c=>`${c.sh} ≥${st.thr[c.k]} дн`).join(', ');
+  let out=`Депозиты с просрочкой · данные на ${fmtDate(NOW)}\nПороги: ${thr}\n`;
+  [...by.entries()].sort((a,b)=>U[a[0]].n.localeCompare(U[b[0]].n,'ru')).forEach(([m,list])=>{
+    out+=`\n${U[m].n} — ${U[m].office} (${list.length})\n`;
+    list.sort((a,b)=>badCount(b)-badCount(a)).forEach(d=>{
+      const why=CV().filter(c=>isBad(d,c.k)).map(c=>{const t=lastOf(d,c.k); return `${c.sh} ${t==null?'нет':Math.floor(age(t))+' дн'}`;}).join(', ');
+      out+=`• #${d.id}${d.t?' '+d.t:''} — ${why}\n  ${D.portal}/crm/deal/details/${d.id}/\n`; });
+  });
+  const ok=await copyText(out); toast(ok?`Скопировано: ${rows.length} депозитов, ${by.size} менеджеров`:'Не удалось скопировать — браузер запретил доступ к буферу');
+};
+
 function render(){
+  expandAll.style.display=st.group&&st.view==='deals'?'':'none';
   const rows=scoped();
   drawTiles(rows);
   const shown=rows.filter(passesActive);
@@ -338,7 +471,7 @@ document.getElementById('note').innerHTML=`
   Торги и просчёты ремонта — задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», привязанные к сделке, или с тем же лотом / VIN / телефоном клиента, что и в сделке.<br>
   <b>Ограничения.</b> История в Bitrix24 начинается с переноса из amoCRM (около 20.09.2026), поэтому «нет» значит «нет с момента переноса». В ноябре к сделке привязаны лишь 60 из 267 задач в «1.2 Торги» и 44 из 461 в «1.1 Расчет ремонта», остальные сопоставлены по лоту, VIN и телефону — торги и просчёты могут быть недосчитаны. Чтобы считалось точно, такие задачи нужно ставить из карточки сделки.`;
 
-fillSelects(); drawStages(); render();
+fillSelects(); drawStages(); drawCols(); render();
 })();
 </script>
 </body>
