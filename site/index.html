@@ -152,6 +152,30 @@ body.compact .ttl{display:none}
   td.deal{max-width:none}.ttl{max-width:none;white-space:normal}
   .tabs .sp{display:none}
 }
+/* v4: рейтинг и динамика */
+#viewBox .card{margin-bottom:12px}
+.vb-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+.vb-h h3{margin:0;font-size:16px}
+.rk{font-variant-numeric:tabular-nums;color:var(--ink3);width:28px}
+.idx{display:inline-block;min-width:52px;text-align:center;padding:4px 9px;border-radius:8px;font-weight:700;font-variant-numeric:tabular-nums}
+.idx.ok{background:var(--green-bg);color:var(--green)} .idx.warn{background:var(--amber-bg);color:#a06c08} .idx.bad{background:var(--red-bg);color:var(--red)}
+.dl{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.dl.up{color:var(--green)} .dl.down{color:var(--red)} .dl.zero{color:var(--ink3);font-weight:500}
+.minibar{display:inline-flex;gap:3px;vertical-align:middle}
+.minibar span{font-size:11px;padding:2px 6px;border-radius:6px;font-variant-numeric:tabular-nums}
+.rtbl{width:100%;border-collapse:collapse;font-size:13px}
+.rtbl th{background:#fbfbf9;text-align:left;font-weight:600;color:var(--ink2);font-size:12px;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.rtbl td{padding:8px 10px;border-bottom:1px solid var(--line2);white-space:nowrap}
+.rtbl tr:last-child td{border-bottom:0}
+.rtbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+.chart{width:100%;height:auto;display:block}
+.chart text{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink3)}
+.lg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink2);margin:6px 0 2px}
+.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.seg2{display:inline-flex;gap:3px}
+.seg2 button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
+.seg2 button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+@media (max-width:700px){ .rtbl .hide-m{display:none} }
 .empty{padding:30px;text-align:center;color:var(--ink3)}
 @media (max-width:1100px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.filters,.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -203,6 +227,8 @@ body.compact .ttl{display:none}
     <button class="chip on" data-view="deals">Депозиты</button>
     <button class="chip" data-view="mgrs">По менеджерам</button>
     <button class="chip" data-view="offices">По офисам</button>
+    <button class="chip" data-view="rating">Рейтинг</button>
+    <button class="chip" data-view="trend">Динамика</button>
     <span class="sp"></span>
     <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
     <button class="chip" type="button" id="tblToggle"></button>
@@ -216,7 +242,7 @@ body.compact .ttl{display:none}
     <span class="sp"></span>
     <button class="chip" type="button" id="copyBtn" title="Скопировать список просроченных депозитов для отправки в мессенджер">📋 Скопировать просрочки</button>
   </div>
-  <div class="tbl-wrap" id="tblWrap"><table id="tbl"></table></div>
+  <div id="mainBox"><div class="tbl-wrap" id="tblWrap"><table id="tbl"></table></div><div id="viewBox"></div></div>
   <div class="toast" id="toast"></div>
 
   <details class="note" id="noteBox"><summary>Легенда и как считается</summary><div id="note"></div></details>
@@ -414,7 +440,7 @@ function drawAgg(rows,view){
   tbl.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
   tbl.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('mgrs');});
 }
-const tblWrap=document.getElementById('tblWrap'), tblBtn=document.getElementById('tblToggle');
+const tblWrap=document.getElementById('mainBox'), tblBtn=document.getElementById('tblToggle');
 function setTbl(open){ tblWrap.style.display=open?'':'none'; tblBtn.textContent=open?'Свернуть таблицу ▴':'Показать таблицу ▾'; store('dep_tbl',open?'1':'0'); }
 tblBtn.onclick=()=>setTbl(tblWrap.style.display==='none');
 setTbl(load('dep_tbl')!=='0');
@@ -464,12 +490,90 @@ document.getElementById('copyBtn').onclick=async()=>{
   const ok=await copyText(out); toast(ok?`Скопировано: ${rows.length} депозитов, ${by.size} менеджеров`:'Не удалось скопировать — браузер запретил доступ к буферу');
 };
 
+// ---- снимки истории: общие функции
+const vbox=document.getElementById('viewBox');
+const HCOL=k=>k==='call'&&st.talkOnly?HC.talk:HC[k];
+function inScope(m,stg,id){ const u=U[m]||{grp:'',office:'—'}; return st.stages.has(stg)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(m)===st.mgr)&&(!st.q||String(id).includes(st.q)); }
+function snapRows(s){ return s.x.filter(x=>inScope(x[1],x[2],x[0])).map(x=>({id:x[0],m:x[1],st:x[2],x})); }
+function snapBad(r,k){ const h=r.x[HCOL(k)]; return (h<0?Infinity:h/24)>=st.thr[k]; }
+function curBad(d,k){ return isBad(d,k); }
+function pickSnap(target,tol){ let best=null; (D.hist||[]).forEach(s=>{ if(Math.abs(s.g-target)<=tol&&(!best||Math.abs(s.g-target)<Math.abs(best.g-target))) best=s; }); return best; }
+// индекс дисциплины: среднее по критериям доли депозитов без просрочки, 0–100
+function score(list,bad){ const ks=CV().map(c=>c.k); if(!list.length||!ks.length) return null; return ks.reduce((s,k)=>s+list.filter(d=>!bad(d,k)).length/list.length,0)/ks.length*100; }
+function byMgr(list){ const m=new Map(); list.forEach(d=>{const k=String(d.m); if(!m.has(k)) m.set(k,[]); m.get(k).push(d);}); return m; }
+function mgrScores(list,bad){ const out=new Map(); byMgr(list).forEach((l,m)=>out.set(m,{n:l.length,s:score(l,bad),l})); return out; }
+function teamScores(ms){ const t=new Map(); ms.forEach((v,m)=>{ const o=(U[m]||{}).office||'—'; if(!t.has(o)) t.set(o,[]); t.get(o).push({m,...v}); });
+  const out=new Map(); t.forEach((arr,o)=>{ const sc=arr.filter(a=>a.s!=null); out.set(o,{mgrs:arr,n:arr.reduce((s,a)=>s+a.n,0),s:sc.length?sc.reduce((s,a)=>s+a.s,0)/sc.length:null}); }); return out; }
+const idxCls=v=>v==null?'':v>=80?'ok':v>=60?'warn':'bad';
+const fmtIdx=v=>v==null?'—':Math.round(v);
+function dlt(cur,prev){ if(cur==null||prev==null) return '<span class="dl zero">—</span>'; const d=Math.round(cur-prev); return d>0?`<span class="dl up">▲ ${d}</span>`:d<0?`<span class="dl down">▼ ${-d}</span>`:'<span class="dl zero">0</span>'; }
+
+function drawRating(rows){
+  const cur=mgrScores(rows,curBad);
+  const sY=PREV, sW=pickSnap(NOW-7*DAY,36*3600000);
+  const prevY=sY?mgrScores(snapRows(sY),snapBad):new Map(), prevW=sW?mgrScores(snapRows(sW),snapBad):new Map();
+  const tc=teamScores(cur), tY=teamScores(prevY), tW=teamScores(prevW);
+  const crit=CV();
+  const mini=l=>`<span class="minibar">${crit.map(c=>{const ok=l.filter(d=>!isBad(d,c.k)).length/l.length*100; return `<span class="ago ${idxCls(ok)}" title="${c.name}: ${Math.round(ok)}% депозитов в норме">${c.sh} ${Math.round(ok)}</span>`;}).join('')}</span>`;
+  const teams=[...tc.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1));
+  const mgrs=[...cur.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1)||b[1].n-a[1].n);
+  const note=`Индекс — среднее по включённым критериям доли депозитов без просрочки (при текущих порогах). 100 — всё в норме. Индекс команды — среднее индексов её менеджеров.${sW?'':' Изменение за неделю появится, когда накопится история (сбор начат 14.11).'}`;
+  vbox.innerHTML=`
+  <div class="card"><div class="vb-h"><h3>Рейтинг команд</h3><span class="muted small">${teams.length} команд</span></div>
+  <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>#</th><th>Команда</th><th>Индекс</th><th>к вчера</th><th>за неделю</th><th>Менеджеров</th><th class="hide-m">Депозитов</th><th class="hide-m">Лучший</th><th class="hide-m">Слабее всех</th></tr></thead><tbody>
+  ${teams.map(([o,v],i)=>{ const ms=v.mgrs.filter(a=>a.s!=null).sort((a,b)=>b.s-a.s); const best=ms[0], worst=ms.length>1?ms[ms.length-1]:null;
+    return `<tr><td class="rk">${i+1}</td><td><span class="mgr-link" data-o="${esc(o)}">${esc(o)}</span></td><td><span class="idx ${idxCls(v.s)}">${fmtIdx(v.s)}</span></td><td>${dlt(v.s,tY.get(o)?.s)}</td><td>${dlt(v.s,tW.get(o)?.s)}</td><td class="num">${v.mgrs.length}</td><td class="num hide-m">${v.n}</td>
+    <td class="small hide-m">${best?esc(U[best.m].n)+' · '+Math.round(best.s):'—'}</td><td class="small hide-m">${worst?esc(U[worst.m].n)+' · '+Math.round(worst.s):'—'}</td></tr>`;}).join('')}
+  </tbody></table></div></div>
+  <div class="card"><div class="vb-h"><h3>Рейтинг менеджеров</h3><span class="muted small">${mgrs.length} менеджеров</span></div>
+  <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>#</th><th>Менеджер</th><th class="hide-m">Офис</th><th>Индекс</th><th>к вчера</th><th>за неделю</th><th class="num">Депозитов</th><th class="hide-m">% в норме по критериям</th></tr></thead><tbody>
+  ${mgrs.map(([m,v],i)=>`<tr><td class="rk">${i+1}</td><td><span class="mgr-link" data-m="${m}">${esc(U[m].n)}</span></td><td class="small hide-m">${esc(U[m].office)}</td><td><span class="idx ${idxCls(v.s)}">${fmtIdx(v.s)}</span></td><td>${dlt(v.s,prevY.get(m)?.s)}</td><td>${dlt(v.s,prevW.get(m)?.s)}</td><td class="num">${v.n}</td><td class="hide-m">${mini(v.l)}</td></tr>`).join('')}
+  </tbody></table></div></div>
+  <div class="note">${note}</div>`;
+  vbox.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
+  vbox.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('rating');});
+}
+
+const CCOL={call:'#3b6fd4',com:'#d99a1e',sel:'#3e9b4f',torg:'#d9542b',calc:'#8a5cc7'};
+st.trendMode='n';
+function drawTrend(){
+  const kyivDay=g=>new Date(g).toLocaleDateString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit'});
+  const byDay=new Map(); (D.hist||[]).filter(s=>s.g>=NOW-14*DAY&&s.g<NOW-3600000).forEach(s=>{ const d=kyivDay(s.g); if(!byDay.has(d)||byDay.get(d).g<s.g) byDay.set(d,s); });
+  const pts=[...byDay.values()].sort((a,b)=>a.g-b.g).map(s=>{ const rows=snapRows(s); const v={}; CV().forEach(c=>v[c.k]=rows.filter(r=>snapBad(r,c.k)).length); return {g:s.g,n:rows.length,v}; });
+  const cr=scoped(); const vn={}; CV().forEach(c=>vn[c.k]=cr.filter(d=>isBad(d,c.k)).length);
+  const today=kyivDay(NOW); const P=pts.filter(p=>kyivDay(p.g)!==today); P.push({g:NOW,n:cr.length,v:vn});
+  const val=(p,k)=>st.trendMode==='p'?(p.n?p.v[k]/p.n*100:0):p.v[k];
+  const W=820,H=280,L=44,Rr=34,T=16,B=34; const xs=P.length>1?(i=>L+i*(W-L-Rr)/(P.length-1)):(()=>L+(W-L-Rr)/2);
+  let max=0; P.forEach(p=>CV().forEach(c=>max=Math.max(max,val(p,c.k)))); const stp=st.trendMode==='p'?25:[1,2,5,10,20,25,50,100,200].find(s=>s*4>=max)||250; max=stp*4;
+  const y=v=>T+(H-T-B)*(1-v/max);
+  const ticks=[0,1,2,3,4].map(i=>i*stp);
+  let svg=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Динамика просрочек">`;
+  ticks.forEach(v=>{ svg+=`<line x1="${L}" x2="${W-Rr}" y1="${y(v)}" y2="${y(v)}" stroke="#ecebe6"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}${st.trendMode==='p'?'%':''}</text>`; });
+  P.forEach((p,i)=>{ svg+=`<text x="${xs(i)}" y="${H-12}" text-anchor="middle">${i===P.length-1?'сейчас':kyivDay(p.g)}</text>`; });
+  CV().forEach(c=>{ const d=P.map((p,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${y(val(p,c.k)).toFixed(1)}`).join(' ');
+    if(P.length>1) svg+=`<path d="${d}" fill="none" stroke="${CCOL[c.k]}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    P.forEach((p,i)=>{ svg+=`<circle cx="${xs(i)}" cy="${y(val(p,c.k))}" r="3.5" fill="#fff" stroke="${CCOL[c.k]}" stroke-width="2"><title>${c.name} · ${i===P.length-1?'сейчас':kyivDay(p.g)}: ${p.v[c.k]} из ${p.n} (${p.n?Math.round(p.v[c.k]/p.n*100):0}%)</title></circle>`; }); });
+  svg+='</svg>';
+  vbox.innerHTML=`<div class="card"><div class="vb-h"><h3>Динамика просрочек</h3><span class="muted small">сколько депозитов без действия дольше порога, по дням (последние 14 дней)</span><span class="sp" style="flex:1"></span>
+    <span class="seg2"><button data-tm="n" class="${st.trendMode==='n'?'on':''}">штук</button><button data-tm="p" class="${st.trendMode==='p'?'on':''}">% от депозитов</button></span></div>
+    <div class="lg">${CV().map(c=>`<span><i style="background:${CCOL[c.k]}"></i>${c.name} (≥${st.thr[c.k]} дн)</span>`).join('')}</div>
+    ${svg}
+    ${P.length<3?'<div class="note">История начала собираться 14.11.2026 — по точке в день. Через несколько дней здесь появятся линии.</div>':''}</div>
+    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th><th class="num">Депозитов</th>${CV().map(c=>`<th class="num">${c.wo}</th>`).join('')}</tr></thead><tbody>
+    ${P.slice().reverse().map((p,i)=>`<tr><td>${i===0?'сейчас':kyivDay(p.g)}</td><td class="num">${p.n}</td>${CV().map(c=>`<td class="num">${p.v[c.k]} <span class="cnt">${p.n?Math.round(p.v[c.k]/p.n*100):0}%</span></td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>`;
+  vbox.querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{st.trendMode=b.dataset.tm; drawTrend();});
+}
+
 function render(){
   expandAll.style.display=st.group&&st.view==='deals'?'':'none';
   const rows=scoped();
   drawTiles(rows);
   const shown=rows.filter(passesActive);
-  if(st.view==='deals') drawDeals(shown); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
+  const special=st.view==='rating'||st.view==='trend';
+  document.getElementById('tblWrap').style.display=special?'none':''; vbox.style.display=special?'':'none';
+  document.getElementById('tools').style.display=st.view==='trend'?'none':'';
+  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
 }
 
 document.getElementById('note').innerHTML=`
