@@ -141,6 +141,14 @@ def ms(s):
         return None
 
 
+def clean_title(s):
+    """Название сделки без телефонов клиента (любая группа цифр, где 9+ цифр)."""
+    s = re.sub(r"\+?\(?\d[\d\s\-().]{6,}\d", lambda m: "" if len(re.sub(r"\D", "", m.group(0))) >= 9 else m.group(0), s or "")
+    s = re.sub(r"\s+", " ", s)
+    s = re.sub(r"(\s*[-—–,;:/|]\s*)+$", "", s)
+    return re.sub(r"^(\s*[-—–,;:/|]\s*)+", "", s).strip()
+
+
 def chunks(seq, n=50):
     for i in range(0, len(seq), n):
         yield seq[i:i + n]
@@ -298,7 +306,7 @@ def collect(bx, now_ms):
                 sel_t.append(t)
         tg, ca = torgs.get(i, []), calcs.get(i, [])
         rows.append({
-            "id": int(i), "t": re.sub(r"\s+", " ", (d.get("TITLE") or "").strip()), "st": d["STAGE_ID"], "m": int(mgr),
+            "id": int(i), "t": clean_title(d.get("TITLE")), "st": d["STAGE_ID"], "m": int(mgr),
             "cr": ms(d.get("DATE_CREATE")), "mv": ms(d.get("MOVED_TIME")),
             "call": {"last": last(call_t), "lastTalk": last(talk_t), "n30": n30(call_t), "talk30": n30(talk_t)},
             "com": {"last": last(com_t), "n30": n30(com_t)},
