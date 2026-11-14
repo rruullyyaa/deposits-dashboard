@@ -85,6 +85,8 @@ td a:hover{text-decoration:underline}
 .mgr-link{cursor:pointer;color:var(--ink);font-weight:600}
 .mgr-link:hover{color:var(--blue)}
 .small{font-size:12px}
+details.note summary{cursor:pointer;font-weight:600;color:var(--ink);margin-bottom:8px}
+#tblToggle{font-weight:600}
 .note{margin-top:16px;font-size:12px;color:var(--ink2);line-height:1.55}
 .note b{color:var(--ink)}
 .legend{display:flex;gap:12px;align-items:center;font-size:12px;color:var(--ink2);flex-wrap:wrap}
@@ -148,11 +150,12 @@ td a:hover{text-decoration:underline}
     <button class="chip" data-view="offices">По офисам</button>
     <span class="sp"></span>
     <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
+    <button class="chip" type="button" id="tblToggle"></button>
   </div>
 
-  <div class="tbl-wrap"><table id="tbl"></table></div>
+  <div class="tbl-wrap" id="tblWrap"><table id="tbl"></table></div>
 
-  <div class="note" id="note"></div>
+  <details class="note" id="noteBox"><summary>Легенда и как считается</summary><div id="note"></div></details>
 </div>
 
 <script>
@@ -240,7 +243,7 @@ function drawStages(){
     return `<button class="chip ${st.stages.has(s.id)?'on':''}" data-s="${s.id}">${s.name} <span style="opacity:.6">${n}</span></button>`}).join('');
   stWrap.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{const id=b.dataset.s; if(st.stages.has(id)&&st.stages.size>1) st.stages.delete(id); else st.stages.add(id); drawStages(); render();});
 }
-document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{st.view=b.dataset.view;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));render();});
+document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{setTbl(true);st.view=b.dataset.view;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x===b));render();});
 
 function scoped(){
   return D.deals.filter(d=>{const u=U[d.m];
@@ -264,7 +267,7 @@ function drawTiles(rows){
     </div>`}).join('');
   tilesEl.querySelectorAll('.tile').forEach(t=>t.onclick=e=>{
     if(e.target.closest('.seg')||e.target.closest('.opt')) return;
-    const k=t.dataset.k; st.active.has(k)?st.active.delete(k):st.active.add(k); st.view='deals';
+    const k=t.dataset.k; st.active.has(k)?st.active.delete(k):st.active.add(k); st.view='deals'; setTbl(true);
     document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view==='deals')); render();});
   tilesEl.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{st.thr[b.dataset.k]=+b.dataset.v;render();});
   const to=document.getElementById('talkOnly'); if(to) to.onchange=e=>{st.talkOnly=e.target.checked;render();};
@@ -316,7 +319,11 @@ function drawAgg(rows,view){
   tbl.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
   tbl.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('mgrs');});
 }
-function setView(v){st.view=v;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view===v));render();}
+const tblWrap=document.getElementById('tblWrap'), tblBtn=document.getElementById('tblToggle');
+function setTbl(open){ tblWrap.style.display=open?'':'none'; tblBtn.textContent=open?'Свернуть таблицу ▴':'Показать таблицу ▾'; store('dep_tbl',open?'1':'0'); }
+tblBtn.onclick=()=>setTbl(tblWrap.style.display==='none');
+setTbl(load('dep_tbl')!=='0');
+function setView(v){setTbl(true);st.view=v;document.querySelectorAll('[data-view]').forEach(x=>x.classList.toggle('on',x.dataset.view===v));render();}
 
 function render(){
   const rows=scoped();
