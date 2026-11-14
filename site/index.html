@@ -33,7 +33,7 @@ h1{font-size:26px;margin:4px 0 2px;letter-spacing:-.01em}
 .muted{color:var(--ink3)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px}
 /* filters */
-.filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:12px}
 label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--ink2);font-weight:500}
 select,input[type=search]{font:inherit;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 10px;color:var(--ink);width:100%}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -82,6 +82,7 @@ td a:hover{text-decoration:underline}
 .flags{display:flex;gap:3px}
 .flag{width:9px;height:9px;border-radius:3px;background:var(--green)}
 .flag.bad{background:var(--red)}
+.flag.na{background:#dcdbd5}
 .mgr-link{cursor:pointer;color:var(--ink);font-weight:600}
 .mgr-link:hover{color:var(--blue)}
 .small{font-size:12px}
@@ -176,6 +177,11 @@ body.compact .ttl{display:none}
 .seg2 button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
 .seg2 button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 @media (max-width:700px){ .rtbl .hide-m{display:none} }
+/* v5: направление */
+.dirtag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:1px;background:#eef1f6;color:#4a5876}
+.dirtag.kor{background:#e9f3ff;color:#2f6db5}.dirtag.chn{background:#fdecea;color:#b4402f}.dirtag.eur{background:#eef0ff;color:#4b52b3}
+.dirtag.auto{opacity:.85}
+.ago.na{background:transparent;color:var(--ink3);font-weight:500}
 .empty{padding:30px;text-align:center;color:var(--ink3)}
 @media (max-width:1100px){.tiles{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:900px){.filters,.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -216,6 +222,7 @@ body.compact .ttl{display:none}
       <label class="f">Отдел<select id="fGrp"></select></label>
       <label class="f">Офис<select id="fOffice"></select></label>
       <label class="f">Менеджер<select id="fMgr"></select></label>
+      <label class="f">Направление<select id="fDir"><option value="">Все направления</option><option value="usa">США / Канада</option><option value="kor">Корея</option><option value="chn">Китай</option><option value="eur">Европа</option></select></label>
       <label class="f">Поиск: № или название сделки<input id="fSearch" type="search" placeholder="например 327793 или Tucson"></label>
     </div>
     <div class="chips" id="fStages"></div>
@@ -292,7 +299,7 @@ const CRIT=[
   {k:'torg', col:'Торги', wo:'Без торгов', sh:'торги', name:'Торги', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.2 Торги» по этому клиенту'},
   {k:'calc', col:'Просчёт', wo:'Без просчётов', sh:'просчёт', name:'Просчёты', opts:[3,7,14,21,30], def:14, hint:'Последняя задача в проекте «1.1 Расчет ремонта США/Канада» по этому клиенту'},
 ];
-const st={grp:'',office:'',mgr:'',q:'',stages:new Set(D.stages.map(s=>s.id)),thr:{},active:new Set(),view:'deals',onlyBad:false,talkOnly:false,sort:{deals:['bad',-1],mgrs:['bad',-1],offices:['bad',-1]}};
+const st={grp:'',office:'',mgr:'',dir:'',q:'',stages:new Set(D.stages.map(s=>s.id)),thr:{},active:new Set(),view:'deals',onlyBad:false,talkOnly:false,sort:{deals:['bad',-1],mgrs:['bad',-1],offices:['bad',-1]}};
 CRIT.forEach(c=>st.thr[c.k]=c.def);
 let savedCols=null; try{savedCols=JSON.parse(load('dep_cols'))}catch(e){}
 st.cols=new Set(Array.isArray(savedCols)&&savedCols.length?savedCols:CRIT.map(c=>c.k));
@@ -306,7 +313,10 @@ document.getElementById('genAt').textContent=fmtDate(NOW)+' (Киев)';
 // ---- derived
 function lastOf(d,k){ if(k==='call') return st.talkOnly? d.call.lastTalk : d.call.last; return d[k].last; }
 function age(t){ return t==null? Infinity : (NOW-t)/DAY; }
-function isBad(d,k){ return age(lastOf(d,k)) >= st.thr[k]; }
+const DIRN={usa:'США',kor:'Корея',chn:'Китай',eur:'Европа'};
+const USA_ONLY={torg:1,calc:1};
+function applies(d,k){ return !USA_ONLY[k] || (d.dir||'usa')==='usa'; }
+function isBad(d,k){ return applies(d,k) && age(lastOf(d,k)) >= st.thr[k]; }
 function cls(d,k){ const a=age(lastOf(d,k)); if(a===Infinity) return 'none'; if(a>=st.thr[k]) return 'bad'; if(a>=st.thr[k]*0.66) return 'warn'; return 'ok'; }
 function agoTxt(t){ if(t==null) return 'нет'; const a=(NOW-t)/DAY; if(a<1) return 'сегодня'; return Math.floor(a)+' дн'; }
 function n30(d,k){ return k==='call'? (st.talkOnly? d.call.talk30 : d.call.n30) : d[k].n30; }
@@ -329,6 +339,7 @@ function fillSelects(){
 grpSel.onchange=e=>{st.grp=e.target.value;fillSelects();render()};
 offSel.onchange=e=>{st.office=e.target.value;fillSelects();render()};
 mgrSel.onchange=e=>{st.mgr=e.target.value;render()};
+document.getElementById('fDir').onchange=e=>{st.dir=e.target.value;render()};
 document.getElementById('fSearch').oninput=e=>{st.q=e.target.value.trim();render()};
 document.getElementById('onlyBad').onchange=e=>{st.onlyBad=e.target.checked;render()};
 const stWrap=document.getElementById('fStages');
@@ -349,7 +360,7 @@ document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{setTbl(true);
 
 function scoped(){
   return D.deals.filter(d=>{const u=U[d.m];
-    return st.stages.has(d.st)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(d.m)===st.mgr)&&(!st.q||String(d.id).includes(st.q)||(d.t||'').toLowerCase().includes(st.q.toLowerCase()));});
+    return st.stages.has(d.st)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(d.m)===st.mgr)&&(!st.dir||(d.dir||'usa')===st.dir)&&(!st.q||String(d.id).includes(st.q)||(d.t||'').toLowerCase().includes(st.q.toLowerCase()));});
 }
 function passesActive(d){ if(st.active.size){ for(const k of st.active) if(!isBad(d,k)) return false; return true;} return st.onlyBad? badCount(d)>0 : true; }
 
@@ -358,14 +369,14 @@ const tilesEl=document.getElementById('tiles');
 function drawTiles(rows){
   tilesEl.style.setProperty('--n',Math.min(CV().length,5));
   tilesEl.innerHTML=CV().map(c=>{
-    const bad=rows.filter(d=>isBad(d,c.k)).length, tot=rows.length, pct=tot?Math.round(bad/tot*100):0;
+    const appl=rows.filter(d=>applies(d,c.k)), bad=appl.filter(d=>isBad(d,c.k)).length, tot=appl.length, pct=tot?Math.round(bad/tot*100):0;
     const pb=prevBad(c.k); let dl='';
-    if(pb!=null){ const df=bad-pb; dl=df>0?`<span class="delta up" title="Сравнение со снимком ${fmtDate(PREV.g)}">▲ ${df} к вчера</span>`:df<0?`<span class="delta down" title="Сравнение со снимком ${fmtDate(PREV.g)}">▼ ${-df} к вчера</span>`:`<span class="delta same" title="Сравнение со снимком ${fmtDate(PREV.g)}">= как вчера</span>`; }
+    if(pb!=null&&tot){ const df=bad-pb; dl=df>0?`<span class="delta up" title="Сравнение со снимком ${fmtDate(PREV.g)}">▲ ${df} к вчера</span>`:df<0?`<span class="delta down" title="Сравнение со снимком ${fmtDate(PREV.g)}">▼ ${-df} к вчера</span>`:`<span class="delta same" title="Сравнение со снимком ${fmtDate(PREV.g)}">= как вчера</span>`; }
     const color=pct>=40?'var(--red)':pct>=20?'var(--amber)':'var(--green)';
     const pill=pct>=40?'p-red':pct>=20?'p-amber':'p-green';
     return `<div class="card tile ${st.active.has(c.k)?'on':''}" data-k="${c.k}" title="${c.hint}">
-      <div class="t-top"><span class="name">${c.name}</span><span class="pill ${pill}">${pct}%</span></div>
-      <div class="big">${bad}<small>из ${tot} без действия</small></div>${dl?`<div style="margin-top:-2px">${dl}</div>`:''}
+      <div class="t-top"><span class="name">${c.name}${USA_ONLY[c.k]?' <span class="muted small" style="font-weight:500">· США</span>':''}</span>${tot?`<span class="pill ${pill}">${pct}%</span>`:''}</div>
+      <div class="big">${tot?`${bad}<small>из ${tot} без действия</small>`:'—<small style="display:block;margin:4px 0 0;font-size:12px;line-height:1.3">считается только для США/Канады</small>'}</div>${dl?`<div style="margin-top:-2px">${dl}</div>`:''}
       <div class="bar"><i style="width:${pct}%;background:${color}"></i></div>
       <div class="seg"><span>не было ≥</span>${c.opts.map(o=>`<button data-k="${c.k}" data-v="${o}" class="${st.thr[c.k]===o?'on':''}">${o} дн</button>`).join('')}</div>
       ${c.k==='call'?`<label class="opt"><input type="checkbox" id="talkOnly" ${st.talkOnly?'checked':''}> только разговоры от 30 с</label>`:''}
@@ -384,15 +395,15 @@ function sortRows(rows,key,dir,get){ return rows.sort((a,b)=>{const x=get(a,key)
 function th(view,key,label,num){ const [k,dir]=st.sort[view]; return `<th class="${num?'num':''}" data-sort="${key}">${label} <span class="arr">${k===key?(dir>0?'▲':'▼'):''}</span></th>`; }
 function bindSort(view){ tbl.querySelectorAll('[data-sort]').forEach(h=>h.onclick=()=>{const k=h.dataset.sort; const s=st.sort[view]; st.sort[view]=[k, s[0]===k? -s[1] : -1]; render();}); }
 
-function cell(d,k){ const c=CRIT.find(x=>x.k===k); const t=lastOf(d,k); return `<td class="c" data-l="${c.col}" title="${t?fmtDate(t):'нет с момента переноса в Bitrix'}"><div class="stack"><span class="ago ${cls(d,k)}">${agoTxt(t)}</span><span class="cnt">${n30(d,k)} за 30 дн</span></div></td>`; }
+function cell(d,k){ const c=CRIT.find(x=>x.k===k); if(!applies(d,k)) return `<td class="c" data-l="${c.col}" title="Не учитывается: направление ${DIRN[d.dir]||''} — торги и просчёты только для США/Канады"><div class="stack"><span class="ago na">—</span></div></td>`; const t=lastOf(d,k); return `<td class="c" data-l="${c.col}" title="${t?fmtDate(t):'нет с момента переноса в Bitrix'}"><div class="stack"><span class="ago ${cls(d,k)}">${agoTxt(t)}</span><span class="cnt">${n30(d,k)} за 30 дн</span></div></td>`; }
 function dealRow(d,grouped){
   return `<tr>
-    <td class="deal"><a href="${D.portal}/crm/deal/details/${d.id}/" target="_blank" rel="noopener">#${d.id}</a>${d.t?`<div class="ttl" title="${esc(d.t)}">${esc(d.t)}</div>`:''}</td>
+    <td class="deal"><a href="${D.portal}/crm/deal/details/${d.id}/" target="_blank" rel="noopener">#${d.id}</a><span class="dirtag ${d.dir||'usa'} ${d.dirSrc==='field'?'':'auto'}" title="${d.dirSrc==='field'?'Направление из поля сделки':d.dirSrc==='default'?'Направление не определено — по умолчанию США':'Определено автоматически по ссылкам/названию'}">${DIRN[d.dir||'usa']}${d.dirSrc==='field'?'':'*'}</span>${d.t?`<div class="ttl" title="${esc(d.t)}">${esc(d.t)}</div>`:''}</td>
     ${grouped?'':`<td class="meta" data-l="Менеджер"><span class="mgr-link" data-m="${d.m}">${esc(U[d.m].n)}</span></td>
     <td class="small meta" data-l="Офис">${esc(U[d.m].office)}</td>`}
     <td class="stg meta" data-l="Стадия" title="${STG[d.st]}">${SHORT[d.st]||STG[d.st]} · ${Math.floor(age(d.mv))} дн</td>
     ${CV().map(c=>cell(d,c.k)).join('')}
-    <td class="flagcell" data-l="Просрочки"><div class="flags">${CV().map(c=>`<span class="flag ${isBad(d,c.k)?'bad':''}" title="${c.name}"></span>`).join('')}</div></td>
+    <td class="flagcell" data-l="Просрочки"><div class="flags">${CV().map(c=>`<span class="flag ${!applies(d,c.k)?'na':isBad(d,c.k)?'bad':''}" title="${c.name}${applies(d,c.k)?'':': не учитывается'}"></span>`).join('')}</div></td>
   </tr>`;
 }
 function drawDeals(rows){
@@ -419,14 +430,14 @@ function drawDeals(rows){
 
 function agg(rows,keyFn,labelFn){
   const m=new Map();
-  rows.forEach(d=>{const k=keyFn(d); if(!m.has(k)) m.set(k,{k,label:labelFn(d),n:0,b:{call:0,com:0,sel:0,torg:0,calc:0},c:{call:0,com:0,sel:0,torg:0,calc:0},any:0}); const g=m.get(k); g.n++; let any=0;
-    CV().forEach(c=>{if(isBad(d,c.k)){g.b[c.k]++;any=1;} g.c[c.k]+=n30(d,c.k);}); g.any+=any;});
+  rows.forEach(d=>{const k=keyFn(d); if(!m.has(k)) m.set(k,{k,label:labelFn(d),n:0,na:{call:0,com:0,sel:0,torg:0,calc:0},b:{call:0,com:0,sel:0,torg:0,calc:0},c:{call:0,com:0,sel:0,torg:0,calc:0},any:0}); const g=m.get(k); g.n++; let any=0;
+    CV().forEach(c=>{ if(!applies(d,c.k)) return; g.na[c.k]++; if(isBad(d,c.k)){g.b[c.k]++;any=1;} g.c[c.k]+=n30(d,c.k);}); g.any+=any;});
   return [...m.values()];
 }
-function pctCell(g,k){ const p=g.n?g.b[k]/g.n:0; const c=p>=.4?'bad':p>=.2?'warn':'ok'; return `<td class="c" data-l="${CRIT.find(x=>x.k===k).wo}"><div class="stack"><span class="ago ${c}">${g.b[k]} из ${g.n}</span><span class="cnt">${g.c[k]} за 30 дн</span></div></td>`; }
+function pctCell(g,k){ const n=g.na[k]; if(!n) return `<td class="c" data-l="${CRIT.find(x=>x.k===k).wo}"><span class="ago na" title="Нет депозитов на США/Канаду">—</span></td>`; const p=g.b[k]/n; const c=p>=.4?'bad':p>=.2?'warn':'ok'; return `<td class="c" data-l="${CRIT.find(x=>x.k===k).wo}"><div class="stack"><span class="ago ${c}">${g.b[k]} из ${n}</span><span class="cnt">${g.c[k]} за 30 дн</span></div></td>`; }
 function drawAgg(rows,view){
   const groups = view==='mgrs' ? agg(rows,d=>String(d.m),d=>U[d.m].n) : agg(rows,d=>U[d.m].office,d=>U[d.m].office);
-  const get=(g,k)=>{ if(k==='label') return g.label; if(k==='n') return g.n; if(k==='bad') return g.any/g.n*1000+g.n/1000; if(k==='office') return U[g.k]?.office||''; return g.b[k]/g.n; };
+  const get=(g,k)=>{ if(k==='label') return g.label; if(k==='n') return g.n; if(k==='bad') return g.any/g.n*1000+g.n/1000; if(k==='office') return U[g.k]?.office||''; return g.na[k]?g.b[k]/g.na[k]:-1; };
   const [k,dir]=st.sort[view]; sortRows(groups,k,dir,get);
   if(!groups.length){ tbl.innerHTML='<tbody><tr><td class="empty">Нет данных под эти условия</td></tr></tbody>'; return; }
   tbl.innerHTML=`<thead><tr>${th(view,'label',view==='mgrs'?'Менеджер':'Офис')}${view==='mgrs'?th(view,'office','Офис'):''}${th(view,'n','Депозитов',1)}${CV().map(c=>th(view,c.k,c.wo)).join('')}${th(view,'bad','Хоть одна просрочка',1)}</tr></thead>
@@ -453,7 +464,8 @@ const PREV=(()=>{ const h=(D.hist||[]).filter(s=>s.g<NOW-12*3600000); if(!h.leng
 function prevBad(k){
   if(!PREV) return null; const col=k==='call'&&st.talkOnly?HC.talk:HC[k]; const ql=st.q.toLowerCase(); let n=0;
   for(const x of PREV.x){ const [id,m,stg]=x; const u=U[m]||{grp:'',office:'—'};
-    if(!st.stages.has(stg)||(st.grp&&u.grp!==st.grp)||(st.office&&u.office!==st.office)||(st.mgr&&String(m)!==st.mgr)||(st.q&&!String(id).includes(st.q))) continue;
+    if(!st.stages.has(stg)||(st.grp&&u.grp!==st.grp)||(st.office&&u.office!==st.office)||(st.mgr&&String(m)!==st.mgr)||(st.dir&&(x[9]||'usa')!==st.dir)||(st.q&&!String(id).includes(st.q))) continue;
+    if(USA_ONLY[k]&&(x[9]||'usa')!=='usa') continue;
     const h=x[col]; const a=h<0?Infinity:h/24; if(a>=st.thr[k]) n++; }
   return n;
 }
@@ -493,13 +505,13 @@ document.getElementById('copyBtn').onclick=async()=>{
 // ---- снимки истории: общие функции
 const vbox=document.getElementById('viewBox');
 const HCOL=k=>k==='call'&&st.talkOnly?HC.talk:HC[k];
-function inScope(m,stg,id){ const u=U[m]||{grp:'',office:'—'}; return st.stages.has(stg)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(m)===st.mgr)&&(!st.q||String(id).includes(st.q)); }
-function snapRows(s){ return s.x.filter(x=>inScope(x[1],x[2],x[0])).map(x=>({id:x[0],m:x[1],st:x[2],x})); }
-function snapBad(r,k){ const h=r.x[HCOL(k)]; return (h<0?Infinity:h/24)>=st.thr[k]; }
+function inScope(m,stg,id,dir){ const u=U[m]||{grp:'',office:'—'}; return st.stages.has(stg)&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(m)===st.mgr)&&(!st.dir||(dir||'usa')===st.dir)&&(!st.q||String(id).includes(st.q)); }
+function snapRows(s){ return s.x.filter(x=>inScope(x[1],x[2],x[0],x[9])).map(x=>({id:x[0],m:x[1],st:x[2],dir:x[9]||'usa',x})); }
+function snapBad(r,k){ if(!applies(r,k)) return false; const h=r.x[HCOL(k)]; return (h<0?Infinity:h/24)>=st.thr[k]; }
 function curBad(d,k){ return isBad(d,k); }
 function pickSnap(target,tol){ let best=null; (D.hist||[]).forEach(s=>{ if(Math.abs(s.g-target)<=tol&&(!best||Math.abs(s.g-target)<Math.abs(best.g-target))) best=s; }); return best; }
 // индекс дисциплины: среднее по критериям доли депозитов без просрочки, 0–100
-function score(list,bad){ const ks=CV().map(c=>c.k); if(!list.length||!ks.length) return null; return ks.reduce((s,k)=>s+list.filter(d=>!bad(d,k)).length/list.length,0)/ks.length*100; }
+function score(list,bad){ const parts=CV().map(c=>{ const a=list.filter(d=>applies(d,c.k)); return a.length?a.filter(d=>!bad(d,c.k)).length/a.length:null; }).filter(v=>v!=null); return parts.length?parts.reduce((s,v)=>s+v,0)/parts.length*100:null; }
 function byMgr(list){ const m=new Map(); list.forEach(d=>{const k=String(d.m); if(!m.has(k)) m.set(k,[]); m.get(k).push(d);}); return m; }
 function mgrScores(list,bad){ const out=new Map(); byMgr(list).forEach((l,m)=>out.set(m,{n:l.length,s:score(l,bad),l})); return out; }
 function teamScores(ms){ const t=new Map(); ms.forEach((v,m)=>{ const o=(U[m]||{}).office||'—'; if(!t.has(o)) t.set(o,[]); t.get(o).push({m,...v}); });
@@ -514,7 +526,7 @@ function drawRating(rows){
   const prevY=sY?mgrScores(snapRows(sY),snapBad):new Map(), prevW=sW?mgrScores(snapRows(sW),snapBad):new Map();
   const tc=teamScores(cur), tY=teamScores(prevY), tW=teamScores(prevW);
   const crit=CV();
-  const mini=l=>`<span class="minibar">${crit.map(c=>{const ok=l.filter(d=>!isBad(d,c.k)).length/l.length*100; return `<span class="ago ${idxCls(ok)}" title="${c.name}: ${Math.round(ok)}% депозитов в норме">${c.sh} ${Math.round(ok)}</span>`;}).join('')}</span>`;
+  const mini=l=>`<span class="minibar">${crit.map(c=>{const a=l.filter(d=>applies(d,c.k)); if(!a.length) return `<span class="ago na" title="${c.name}: нет депозитов на США">${c.sh} —</span>`; const ok=a.filter(d=>!isBad(d,c.k)).length/a.length*100; return `<span class="ago ${idxCls(ok)}" title="${c.name}: ${Math.round(ok)}% депозитов в норме">${c.sh} ${Math.round(ok)}</span>`;}).join('')}</span>`;
   const teams=[...tc.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1));
   const mgrs=[...cur.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1)||b[1].n-a[1].n);
   const note=`Индекс — среднее по включённым критериям доли депозитов без просрочки (при текущих порогах). 100 — всё в норме. Индекс команды — среднее индексов её менеджеров.${sW?'':' Изменение за неделю появится, когда накопится история (сбор начат 14.11).'}`;
@@ -539,10 +551,11 @@ st.trendMode='n';
 function drawTrend(){
   const kyivDay=g=>new Date(g).toLocaleDateString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit'});
   const byDay=new Map(); (D.hist||[]).filter(s=>s.g>=NOW-14*DAY&&s.g<NOW-3600000).forEach(s=>{ const d=kyivDay(s.g); if(!byDay.has(d)||byDay.get(d).g<s.g) byDay.set(d,s); });
-  const pts=[...byDay.values()].sort((a,b)=>a.g-b.g).map(s=>{ const rows=snapRows(s); const v={}; CV().forEach(c=>v[c.k]=rows.filter(r=>snapBad(r,c.k)).length); return {g:s.g,n:rows.length,v}; });
-  const cr=scoped(); const vn={}; CV().forEach(c=>vn[c.k]=cr.filter(d=>isBad(d,c.k)).length);
-  const today=kyivDay(NOW); const P=pts.filter(p=>kyivDay(p.g)!==today); P.push({g:NOW,n:cr.length,v:vn});
-  const val=(p,k)=>st.trendMode==='p'?(p.n?p.v[k]/p.n*100:0):p.v[k];
+  const pts=[...byDay.values()].sort((a,b)=>a.g-b.g).map(s=>{ const rows=snapRows(s); const v={},na={}; CV().forEach(c=>{v[c.k]=rows.filter(r=>snapBad(r,c.k)).length; na[c.k]=rows.filter(r=>applies(r,c.k)).length;}); return {g:s.g,n:rows.length,v,na}; });
+  const cr=scoped(); const vn={},nan={}; CV().forEach(c=>{vn[c.k]=cr.filter(d=>isBad(d,c.k)).length; nan[c.k]=cr.filter(d=>applies(d,c.k)).length;});
+  const today=kyivDay(NOW); const P=pts.filter(p=>kyivDay(p.g)!==today); P.push({g:NOW,n:cr.length,v:vn,na:nan});
+  const pc=(p,k)=>p.na[k]?p.v[k]/p.na[k]*100:0;
+  const val=(p,k)=>st.trendMode==='p'?pc(p,k):p.v[k];
   const W=820,H=280,L=44,Rr=34,T=16,B=34; const xs=P.length>1?(i=>L+i*(W-L-Rr)/(P.length-1)):(()=>L+(W-L-Rr)/2);
   let max=0; P.forEach(p=>CV().forEach(c=>max=Math.max(max,val(p,c.k)))); const stp=st.trendMode==='p'?25:[1,2,5,10,20,25,50,100,200].find(s=>s*4>=max)||250; max=stp*4;
   const y=v=>T+(H-T-B)*(1-v/max);
@@ -552,7 +565,7 @@ function drawTrend(){
   P.forEach((p,i)=>{ svg+=`<text x="${xs(i)}" y="${H-12}" text-anchor="middle">${i===P.length-1?'сейчас':kyivDay(p.g)}</text>`; });
   CV().forEach(c=>{ const d=P.map((p,i)=>`${i?'L':'M'}${xs(i).toFixed(1)},${y(val(p,c.k)).toFixed(1)}`).join(' ');
     if(P.length>1) svg+=`<path d="${d}" fill="none" stroke="${CCOL[c.k]}" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    P.forEach((p,i)=>{ svg+=`<circle cx="${xs(i)}" cy="${y(val(p,c.k))}" r="3.5" fill="#fff" stroke="${CCOL[c.k]}" stroke-width="2"><title>${c.name} · ${i===P.length-1?'сейчас':kyivDay(p.g)}: ${p.v[c.k]} из ${p.n} (${p.n?Math.round(p.v[c.k]/p.n*100):0}%)</title></circle>`; }); });
+    P.forEach((p,i)=>{ svg+=`<circle cx="${xs(i)}" cy="${y(val(p,c.k))}" r="3.5" fill="#fff" stroke="${CCOL[c.k]}" stroke-width="2"><title>${c.name} · ${i===P.length-1?'сейчас':kyivDay(p.g)}: ${p.v[c.k]} из ${p.na[c.k]} (${Math.round(pc(p,c.k))}%)</title></circle>`; }); });
   svg+='</svg>';
   vbox.innerHTML=`<div class="card"><div class="vb-h"><h3>Динамика просрочек</h3><span class="muted small">сколько депозитов без действия дольше порога, по дням (последние 14 дней)</span><span class="sp" style="flex:1"></span>
     <span class="seg2"><button data-tm="n" class="${st.trendMode==='n'?'on':''}">штук</button><button data-tm="p" class="${st.trendMode==='p'?'on':''}">% от депозитов</button></span></div>
@@ -560,7 +573,7 @@ function drawTrend(){
     ${svg}
     ${P.length<3?'<div class="note">История начала собираться 14.11.2026 — по точке в день. Через несколько дней здесь появятся линии.</div>':''}</div>
     <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th><th class="num">Депозитов</th>${CV().map(c=>`<th class="num">${c.wo}</th>`).join('')}</tr></thead><tbody>
-    ${P.slice().reverse().map((p,i)=>`<tr><td>${i===0?'сейчас':kyivDay(p.g)}</td><td class="num">${p.n}</td>${CV().map(c=>`<td class="num">${p.v[c.k]} <span class="cnt">${p.n?Math.round(p.v[c.k]/p.n*100):0}%</span></td>`).join('')}</tr>`).join('')}
+    ${P.slice().reverse().map((p,i)=>`<tr><td>${i===0?'сейчас':kyivDay(p.g)}</td><td class="num">${p.n}</td>${CV().map(c=>`<td class="num">${p.v[c.k]} <span class="cnt">${Math.round(pc(p,c.k))}%</span></td>`).join('')}</tr>`).join('')}
     </tbody></table></div>`;
   vbox.querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{st.trendMode=b.dataset.tm; drawTrend();});
 }
@@ -579,7 +592,8 @@ function render(){
 document.getElementById('note').innerHTML=`
   <div class="legend" style="margin-bottom:8px"><span><span class="ago ok">3 дн</span> в норме</span><span><span class="ago warn">5 дн</span> скоро порог</span><span><span class="ago bad">9 дн</span> дольше порога</span><span><span class="ago none">нет</span> ни разу</span><span>Клик по плитке — показать депозиты, где этого действия не было. Клик по менеджеру — его депозиты.</span></div>
   <b>Как считается.</b> Депозит — сделка в стадиях «${D.stages.map(s=>s.name).join('», «')}». Звонки — звонки Ringostat, привязанные к сделке. Комментарии — комментарии ответственного менеджера (сообщения бота и очереди лидов не считаются). Подбор — комментарий в сделке со ссылкой на авто (Copart, IAAI, Manheim, Encar, Che168, bid.cars и др.).
-  Торги и просчёты ремонта — задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», привязанные к сделке, или с тем же лотом / VIN / телефоном клиента, что и в сделке.<br>
+  Торги и просчёты ремонта — задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», привязанные к сделке, или с тем же лотом / VIN / телефоном клиента, что и в сделке. <b>Они считаются только для депозитов на США/Канаду</b>: для Кореи, Китая и Европы — только звонки, комментарии и подборы.<br>
+  <b>Направление сделки</b> берётся из поля «Направление» в сделке, если оно есть. Иначе определяется автоматически (отмечено «*»): по слову в названии сделки (Корея, Китай, EU…), затем по ссылкам на авто в комментариях за последние 30 дней (encar — Корея, che168 — Китай, mobile.de / otomoto / autoscout — Европа, copart / iaai / manheim — США). Если ссылок нет — США.<br>
   <b>Ограничения.</b> История в Bitrix24 начинается с переноса из amoCRM (около 20.09.2026), поэтому «нет» значит «нет с момента переноса». В ноябре к сделке привязаны лишь 60 из 267 задач в «1.2 Торги» и 44 из 461 в «1.1 Расчет ремонта», остальные сопоставлены по лоту, VIN и телефону — торги и просчёты могут быть недосчитаны. Чтобы считалось точно, такие задачи нужно ставить из карточки сделки.`;
 
 fillSelects(); drawStages(); drawCols(); render();
