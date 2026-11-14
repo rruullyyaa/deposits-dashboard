@@ -47,6 +47,20 @@ SYSTEM_COMMENT = re.compile(r"manychat\.com|Выдан через очередь
 CAR_LINK = re.compile(
     r"(copart\.com|iaai\.com|manheim\.com|encar\.com|che168\.com|bid\.cars|olx\.|999\.md|"
     r"plc\.ua|mobile\.de|otomoto|autoscout|auto\.ria)", re.I)
+# направление сделки: торги и просчёты ремонта считаем только для США/Канады
+REGION_LINKS = {
+    "usa": re.compile(r"copart\.com|iaai\.com|manheim\.com|bid\.cars|autoastat|stat\.vin|bidfax", re.I),
+    "kor": re.compile(r"encar\.com|kbchachacha|kcar\.com", re.I),
+    "chn": re.compile(r"che168\.com|dongchedi|autohome\.com", re.I),
+    "eur": re.compile(r"mobile\.de|otomoto|autoscout|olx\.pl|autobazar|willhaben|leboncoin|marktplaats", re.I),
+}
+REGION_WORDS = {  # слова в названии сделки или в значении поля «Направление»
+    "usa": re.compile(r"сша|\busa\b|америк|канад|\bcanada\b", re.I),
+    "kor": re.compile(r"коре|korea", re.I),
+    "chn": re.compile(r"кита|\bchina\b|\bbyd\b", re.I),
+    "eur": re.compile(r"европ|europe|\beu\b|германи", re.I),
+}
+REGION_RECENT_DAYS = 30
 VIN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 LOT_IN_LINK = re.compile(r"(?:copart\.com/lot/|VehicleDetail/)(\d{6,9})", re.I)
 LOT_8 = re.compile(r"(?:lot/|VehicleDetail/|\b)(\d{8})\b")
@@ -149,6 +163,13 @@ def clean_title(s):
     return re.sub(r"^(\s*[-—–,;:/|]\s*)+", "", s).strip()
 
 
+def region_of_text(text):
+    for code, rx in REGION_WORDS.items():
+        if rx.search(text or ""):
+            return code
+    return None
+
+
 def chunks(seq, n=50):
     for i in range(0, len(seq), n):
         yield seq[i:i + n]
@@ -167,9 +188,26 @@ def vins(text):
 def collect(bx, now_ms):
     log = lambda *a: print(*a, flush=True)
 
+    # поле «Направление» в сделке (если его заведут в Bitrix24) — главный источник
+    dir_field, dir_map = None, {}
+    try:
+        deal_fields = bx.call("crm.deal.fields").get("result") or {}
+    except RuntimeError as e:
+        log(f"Поля сделки не прочитаны: {e}")
+        deal_fields = {}
+    for code, f in deal_fields.items():
+        label = f.get("formLabel") or f.get("listLabel") or f.get("title") or ""
+        if code.startswith("UF_") and re.search(r"направлени", label, re.I):
+            dir_field = code
+            dir_map = {str(i["ID"]): region_of_text(i.get("VALUE")) for i in f.get("items") or []}
+            log(f"Поле направления: {code} «{label}»")
+            break
+    select = ["ID", "TITLE", "STAGE_ID", "ASSIGNED_BY_ID", "DATE_CREATE", "MOVED_TIME", "CONTACT_ID"]
+    if dir_field:
+        select.append(dir_field)
     deals = bx.all("crm.deal.list", {
         "filter": {"CATEGORY_ID": CATEGORY_ID, "STAGE_ID": [s for s, _ in STAGES]},
-        "select": ["ID", "TITLE", "STAGE_ID", "ASSIGNED_BY_ID", "DATE_CREATE", "MOVED_TIME", "CONTACT_ID"],
+        "select": select,
     })
     ids = [d["ID"] for d in deals]
     dep_ids = set(ids)
@@ -295,18 +333,42 @@ def collect(bx, now_ms):
             if e and (e - s) / 1000 >= TALK_MIN_SEC:
                 talk_t.append(s)
         com_t, sel_t = [], []
+        reg_all, reg_recent = {k: 0 for k in REGION_LINKS}, {k: 0 for k in REGION_LINKS}
         for c in comments[i]:
             text = c.get("COMMENT") or ""
             if SYSTEM_COMMENT.search(text):
                 continue
             t = ms(c.get("CREATED"))
+            for code, rx in REGION_LINKS.items():
+                n = len(rx.findall(text))
+                reg_all[code] += n
+                if n and t and t >= now_ms - REGION_RECENT_DAYS * DAY_MS:
+                    reg_recent[code] += n
             if str(c.get("AUTHOR_ID")) == str(mgr):
                 com_t.append(t)
             if CAR_LINK.search(text):
                 sel_t.append(t)
         tg, ca = torgs.get(i, []), calcs.get(i, [])
+        # направление: поле → слово в названии → ссылки за 30 дней → все ссылки → США по умолчанию
+        dir_code, dir_src = None, "auto"
+        if dir_field:
+            v = d.get(dir_field)
+            v = v[0] if isinstance(v, list) and v else v
+            dir_code = dir_map.get(str(v)) if v else None
+            if dir_code:
+                dir_src = "field"
+        if not dir_code:
+            dir_code = region_of_text(d.get("TITLE"))
+        for counts in (reg_recent, reg_all):
+            if not dir_code and any(counts.values()):
+                best = max(counts.values())
+                top = [k for k, n in counts.items() if n == best]
+                dir_code = "usa" if "usa" in top else top[0]
+        if not dir_code:
+            dir_code, dir_src = "usa", "default"
         rows.append({
             "id": int(i), "t": clean_title(d.get("TITLE")), "st": d["STAGE_ID"], "m": int(mgr),
+            "dir": dir_code, "dirSrc": dir_src,
             "cr": ms(d.get("DATE_CREATE")), "mv": ms(d.get("MOVED_TIME")),
             "call": {"last": last(call_t), "lastTalk": last(talk_t), "n30": n30(call_t), "talk30": n30(talk_t)},
             "com": {"last": last(com_t), "n30": n30(com_t)},
@@ -380,7 +442,8 @@ def snapshot(data):
     g = data["generated"]
     h = lambda t: -1 if t is None else round((g - t) / 3_600_000)
     return {"g": g, "x": [[d["id"], d["m"], d["st"], h(d["call"]["last"]), h(d["call"]["lastTalk"]),
-                           h(d["com"]["last"]), h(d["sel"]["last"]), h(d["torg"]["last"]), h(d["calc"]["last"])]
+                           h(d["com"]["last"]), h(d["sel"]["last"]), h(d["torg"]["last"]), h(d["calc"]["last"]),
+                           d.get("dir", "usa")]
                           for d in data["deals"]]}
 
 
