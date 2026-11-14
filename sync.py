@@ -12,6 +12,8 @@
 Переменные окружения:
   BITRIX_WEBHOOK   https://factum-group.bitrix24.eu/rest/<user_id>/<token>/
   DASH_PASSWORD    пароль для сайта (рекомендуется)
+  SITE_URL         адрес сайта (необязательно; в GitHub Actions берётся из имени репозитория).
+                   Нужен, чтобы забрать прошлые снимки для сравнения «к вчера».
 """
 import base64
 import datetime as dt
@@ -36,6 +38,8 @@ TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
 TASKS_LOOKBACK_DAYS = 120  # сколько дней задач в проектах просматривать
 TALK_MIN_SEC = 30          # звонок короче — «недозвон», не разговор
+HIST_HOURLY_KEEP_H = 26    # почасовые снимки для сравнения «к вчера»
+HIST_DAILY_KEEP_D = 14     # по одному снимку в день — для истории
 
 # комментарии, которые пишет бот / очередь лидов — не считаем работой менеджера
 SYSTEM_COMMENT = re.compile(r"manychat\.com|Выдан через очередь|Рука поднята", re.I)
@@ -157,7 +161,7 @@ def collect(bx, now_ms):
 
     deals = bx.all("crm.deal.list", {
         "filter": {"CATEGORY_ID": CATEGORY_ID, "STAGE_ID": [s for s, _ in STAGES]},
-        "select": ["ID", "STAGE_ID", "ASSIGNED_BY_ID", "DATE_CREATE", "MOVED_TIME", "CONTACT_ID"],
+        "select": ["ID", "TITLE", "STAGE_ID", "ASSIGNED_BY_ID", "DATE_CREATE", "MOVED_TIME", "CONTACT_ID"],
     })
     ids = [d["ID"] for d in deals]
     dep_ids = set(ids)
@@ -294,7 +298,7 @@ def collect(bx, now_ms):
                 sel_t.append(t)
         tg, ca = torgs.get(i, []), calcs.get(i, [])
         rows.append({
-            "id": int(i), "st": d["STAGE_ID"], "m": int(mgr),
+            "id": int(i), "t": re.sub(r"\s+", " ", (d.get("TITLE") or "").strip()), "st": d["STAGE_ID"], "m": int(mgr),
             "cr": ms(d.get("DATE_CREATE")), "mv": ms(d.get("MOVED_TIME")),
             "call": {"last": last(call_t), "lastTalk": last(talk_t), "n30": n30(call_t), "talk30": n30(talk_t)},
             "com": {"last": last(com_t), "n30": n30(com_t)},
@@ -325,14 +329,80 @@ def encrypt(data: bytes, password: str, iterations=250_000):
     return {"v": 1, "iter": iterations, "salt": b(salt), "iv": b(iv), "ct": b(ct)}
 
 
+def decrypt(pkg, password):
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    b = base64.b64decode
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b(pkg["salt"]),
+                     iterations=pkg["iter"]).derive(password.encode())
+    return AESGCM(key).decrypt(b(pkg["iv"]), b(pkg["ct"]), None)
+
+
+# ---------------------------------------------------------------- история (для «к вчера»)
+def site_url():
+    if os.environ.get("SITE_URL"):
+        return os.environ["SITE_URL"].rstrip("/") + "/"
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    if "/" in repo:
+        owner, name = repo.split("/", 1)
+        return f"https://{owner.lower()}.github.io/{name}/"
+    return None
+
+
+def load_history(password):
+    """Прошлые снимки берём из уже опубликованного data.enc.json — без коммитов в репозиторий."""
+    url = site_url()
+    if not url or not password:
+        return []
+    try:
+        req = urllib.request.Request(f"{url}data.enc.json?t={int(time.time())}", headers={"Cache-Control": "no-cache"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            prev = json.loads(decrypt(json.loads(r.read().decode()), password))
+        hist = prev.get("hist") or []
+        print(f"История: загружено снимков {len(hist)}")
+        return hist
+    except Exception as e:  # первый запуск, смена пароля, сайт недоступен
+        print(f"История: начинаем заново ({type(e).__name__})")
+        return []
+
+
+def snapshot(data):
+    """Компактный снимок: возраст последнего действия в часах (-1 = не было)."""
+    g = data["generated"]
+    h = lambda t: -1 if t is None else round((g - t) / 3_600_000)
+    return {"g": g, "x": [[d["id"], d["m"], d["st"], h(d["call"]["last"]), h(d["call"]["lastTalk"]),
+                           h(d["com"]["last"]), h(d["sel"]["last"]), h(d["torg"]["last"]), h(d["calc"]["last"])]
+                          for d in data["deals"]]}
+
+
+def merge_history(hist, snap):
+    """Почасовые снимки за последние ~сутки + один снимок в день (первый за день по Киеву)."""
+    from zoneinfo import ZoneInfo
+    kyiv = ZoneInfo("Europe/Kyiv")
+    day = lambda g: dt.datetime.fromtimestamp(g / 1000, kyiv).strftime("%Y-%m-%d")
+    all_snaps = sorted([s for s in hist if isinstance(s, dict) and "g" in s] + [snap], key=lambda s: s["g"])
+    now = snap["g"]
+    keep, seen_days = [], set()
+    for s in all_snaps:
+        d = day(s["g"])
+        recent = now - s["g"] <= HIST_HOURLY_KEEP_H * 3_600_000
+        first_of_day = d not in seen_days and now - s["g"] <= HIST_DAILY_KEEP_D * DAY_MS
+        seen_days.add(d)
+        if recent or first_of_day:
+            keep.append(s)
+    return keep
+
+
 def main():
     bx = Bitrix(os.environ.get("BITRIX_WEBHOOK", ""))
     now_ms = int(time.time() * 1000)
     t0 = time.time()
     data = collect(bx, now_ms)
+    password = os.environ.get("DASH_PASSWORD")
+    data["hist"] = merge_history(load_history(password), snapshot(data))
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
     os.makedirs(SITE_DIR, exist_ok=True)
-    password = os.environ.get("DASH_PASSWORD")
     enc_path, plain_path = os.path.join(SITE_DIR, "data.enc.json"), os.path.join(SITE_DIR, "data.json")
     if password:
         with open(enc_path, "w") as f:
