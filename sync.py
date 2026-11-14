@@ -61,6 +61,16 @@ REGION_WORDS = {  # слова в названии сделки или в зна
     "eur": re.compile(r"европ|europe|\beu\b|германи", re.I),
 }
 REGION_RECENT_DAYS = 30
+_NB = r"(?<![а-яёіїєґa-z])"  # начало слова (в т.ч. кириллица): «скорее» не считается «Кореей»
+REGION_KW = {  # как менеджеры пишут направление в комментариях
+    "usa": re.compile(_NB + r"(сша|америк[а-яёіїє]*|канад[а-яёіїє]*|usa)(?![a-z])", re.I),
+    "kor": re.compile(_NB + r"(коре[яиюйеі][а-яёіїє]*|корейск[а-яёіїє]*|korea[a-z]*)", re.I),
+    "chn": re.compile(_NB + r"(кита[йяюеї][а-яёіїє]*|китайск[а-яёіїє]*|china|byd|zeekr|geely|chery|haval|changan|voyah|xpeng|lixiang|li ?auto|leapmotor|denza|юань)(?![a-z])", re.I),
+    "eur": re.compile(_NB + r"(европ[а-яёіїє]*|європ[а-яёіїє]*|германи[а-яёіїє]*|німеччин[а-яёіїє]*|eu)(?![a-z])", re.I),
+}
+REGION_NEG = re.compile(r"(не|ні|без)\s+(хоч|хоче|смотр|дивит|рассматр|розгляд|интерес|цікав|подход|підход|нужн|треба|надо)", re.I)
+BBCODE = re.compile(r"\[/?[^\]]+\]")
+URL = re.compile(r"https?://\S+")
 VIN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 LOT_IN_LINK = re.compile(r"(?:copart\.com/lot/|VehicleDetail/)(\d{6,9})", re.I)
 LOT_8 = re.compile(r"(?:lot/|VehicleDetail/|\b)(\d{8})\b")
@@ -333,17 +343,20 @@ def collect(bx, now_ms):
             if e and (e - s) / 1000 >= TALK_MIN_SEC:
                 talk_t.append(s)
         com_t, sel_t = [], []
-        reg_all, reg_recent = {k: 0 for k in REGION_LINKS}, {k: 0 for k in REGION_LINKS}
+        reg = {k: 0.0 for k in REGION_LINKS}  # «очки» направления по комментариям
         for c in comments[i]:
             text = c.get("COMMENT") or ""
             if SYSTEM_COMMENT.search(text):
                 continue
             t = ms(c.get("CREATED"))
+            w = 2 if t and t >= now_ms - REGION_RECENT_DAYS * DAY_MS else 1  # свежие комментарии важнее
             for code, rx in REGION_LINKS.items():
-                n = len(rx.findall(text))
-                reg_all[code] += n
-                if n and t and t >= now_ms - REGION_RECENT_DAYS * DAY_MS:
-                    reg_recent[code] += n
+                reg[code] += 0.3 * w * len(rx.findall(text))
+            plain = BBCODE.sub(" ", URL.sub(" ", text))
+            for code, rx in REGION_KW.items():
+                for m in rx.finditer(plain):
+                    ctx = plain[max(0, m.start() - 30):m.end() + 30]
+                    reg[code] += (-1 if REGION_NEG.search(ctx) else 1) * w
             if str(c.get("AUTHOR_ID")) == str(mgr):
                 com_t.append(t)
             if CAR_LINK.search(text):
@@ -358,11 +371,12 @@ def collect(bx, now_ms):
             if dir_code:
                 dir_src = "field"
         if not dir_code:
-            dir_code = region_of_text(d.get("TITLE"))
-        for counts in (reg_recent, reg_all):
-            if not dir_code and any(counts.values()):
-                best = max(counts.values())
-                top = [k for k, n in counts.items() if n == best]
+            for code, rx in REGION_KW.items():
+                if rx.search(d.get("TITLE") or ""):
+                    reg[code] += 10  # направление в названии сделки — сильный признак
+            best = max(reg.values())
+            if best > 0:
+                top = [k for k, n in reg.items() if n == best]
                 dir_code = "usa" if "usa" in top else top[0]
         if not dir_code:
             dir_code, dir_src = "usa", "default"
