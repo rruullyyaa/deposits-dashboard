@@ -410,15 +410,16 @@ function dealRow(d,grouped){
     ${grouped?'':`<td class="meta" data-l="Менеджер"><span class="mgr-link" data-m="${d.m}">${esc(U[d.m].n)}</span></td>
     <td class="small meta" data-l="Офис">${esc(U[d.m].office)}</td>`}
     <td class="stg meta" data-l="Стадия" title="${STG[d.st]}">${SHORT[d.st]||STG[d.st]} · ${Math.floor(age(d.mv))} дн</td>
+    <td class="num small" data-l="В депозите" title="${d.ds?'В депозите с '+fmtDate(d.ds):'Дата попадания в депозит неизвестна'}">${d.ds?Math.floor(age(d.ds))+' дн':'—'}</td>
     ${CV().map(c=>cell(d,c.k)).join('')}
     <td class="flagcell" data-l="Просрочки"><div class="flags">${CV().map(c=>`<span class="flag ${!applies(d,c.k)?'na':isBad(d,c.k)?'bad':''}" title="${c.name}${applies(d,c.k)?'':': не учитывается'}"></span>`).join('')}</div></td>
   </tr>`;
 }
 function drawDeals(rows){
-  const get=(d,k)=>{ if(k==='bad') return badCount(d)*1e6 + Math.min(age(lastOf(d,'call')),999); if(k==='m') return U[d.m].n; if(k==='office') return U[d.m].office; if(k==='st') return D.stages.findIndex(s=>s.id===d.st)*1e4+age(d.mv); if(k==='id') return d.id; return -age(lastOf(d,k)); };
+  const get=(d,k)=>{ if(k==='bad') return badCount(d)*1e6 + Math.min(age(lastOf(d,'call')),999); if(k==='m') return U[d.m].n; if(k==='office') return U[d.m].office; if(k==='st') return D.stages.findIndex(s=>s.id===d.st)*1e4+age(d.mv); if(k==='id') return d.id; if(k==='dep') return d.ds?age(d.ds):-1; return -age(lastOf(d,k)); };
   const [k,dir]=st.sort.deals; sortRows(rows,k,dir,get);
-  const ncol=(st.group?3:5)+CV().length;
-  const head=`<thead><tr>${th('deals','id','Сделка')}${st.group?'':th('deals','m','Менеджер')+th('deals','office','Офис')}${th('deals','st','Стадия · дней')}${CV().map(c=>th('deals',c.k,c.col)).join('')}${th('deals','bad','Итог')}</tr></thead>`;
+  const ncol=(st.group?4:6)+CV().length;
+  const head=`<thead><tr>${th('deals','id','Сделка')}${st.group?'':th('deals','m','Менеджер')+th('deals','office','Офис')}${th('deals','st','Стадия · дней')}${th('deals','dep','В депозите',1)}${CV().map(c=>th('deals',c.k,c.col)).join('')}${th('deals','bad','Итог')}</tr></thead>`;
   let body='';
   if(!rows.length) body=`<tr><td colspan="${ncol}" class="empty">Нет депозитов под эти условия</td></tr>`;
   else if(st.group){
@@ -505,7 +506,7 @@ document.getElementById('copyBtn').onclick=async()=>{
     out+=`\n${U[m].n} — ${U[m].office} (${list.length})\n`;
     list.sort((a,b)=>badCount(b)-badCount(a)).forEach(d=>{
       const why=CV().filter(c=>isBad(d,c.k)).map(c=>{const t=lastOf(d,c.k); return `${c.sh} ${t==null?'нет':Math.floor(age(t))+' дн'}`;}).join(', ');
-      out+=`• #${d.id}${d.t?' '+d.t:''} — ${why}\n  ${D.portal}/crm/deal/details/${d.id}/\n`; });
+      out+=`• #${d.id}${d.t?' '+d.t:''}${d.ds?` (в депозите ${Math.floor(age(d.ds))} дн)`:''} — ${why}\n  ${D.portal}/crm/deal/details/${d.id}/\n`; });
   });
   const ok=await copyText(out); toast(ok?`Скопировано: ${rows.length} депозитов, ${by.size} менеджеров`:'Не удалось скопировать — браузер запретил доступ к буферу');
 };
