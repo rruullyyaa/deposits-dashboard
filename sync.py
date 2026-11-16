@@ -36,6 +36,7 @@ STAGES = [  # рабочие стадии депозитов, по порядк�
 ]
 WIN_STAGE = "7"      # «Выиграли — ждём оплату»: попадание сюда считаем выигрышем
 WIN_DAYS = 30        # за сколько дней брать выигранные сделки для аналитики
+DAILY_DAYS = 45      # сколько дней хранить статистику «по дням»
 TEAM_ROOT_DEPARTMENTS = {"75", "40", "89"}  # «Отдел продаж», «Отдел покупок», «B2B» — все их менеджеры в списках
 TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
@@ -269,7 +270,7 @@ def collect(bx, now_ms):
     for part in chunks(ids, 50):
         calls += bx.all("crm.activity.list", {
             "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": part, "TYPE_ID": 2},
-            "select": ["ID", "OWNER_ID", "DIRECTION", "START_TIME", "END_TIME"],
+            "select": ["ID", "OWNER_ID", "DIRECTION", "START_TIME", "END_TIME", "RESPONSIBLE_ID"],
         })
     log(f"Звонков: {len(calls)}")
 
@@ -315,8 +316,9 @@ def collect(bx, now_ms):
     def match_group(group_id):
         tasks = bx.all("tasks.task.list", {
             "filter": {"GROUP_ID": group_id, ">=CREATED_DATE": since.strftime("%Y-%m-%d")},
-            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "UF_CRM_TASK"],
+            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "UF_CRM_TASK", "CREATED_BY"],
         })
+        task_log.extend((group_id, ms(t.get("createdDate")), str(t.get("createdBy") or "")) for t in tasks)
         found, linked = {}, 0
         for t in tasks:
             text = f"{t.get('title') or ''} {t.get('description') or ''}"
@@ -341,6 +343,7 @@ def collect(bx, now_ms):
         log(f"Проект {group_id}: задач {len(tasks)}, привязано к CRM {linked}, найдено сделок {len(found)}")
         return found, {"tasks": len(tasks), "linked": linked}
 
+    task_log = []  # (проект, когда создана, кто поставил) — для статистики по дням
     torgs, torg_stat = match_group(TORG_GROUP_ID)
     calcs, calc_stat = match_group(CALC_GROUP_ID)
 
@@ -467,6 +470,37 @@ def collect(bx, now_ms):
             "dir": x["dir"], "dirSrc": x["dirSrc"], "won": won, "ds": start, "tot": tot,
         })
 
+    # статистика по дням: кто сколько сделал (Киев). Звонки/комментарии/подборы — по депозитам и выигранным,
+    # торги/просчёты — все задачи в проектах по постановщику.
+    from zoneinfo import ZoneInfo
+    kyiv = ZoneInfo("Europe/Kyiv")
+    day_of = lambda ts: dt.datetime.fromtimestamp(ts / 1000, kyiv).strftime("%Y-%m-%d")
+    since_daily = now_ms - DAILY_DAYS * DAY_MS
+    daily = {}
+    def bump(ts, who, idx):
+        if not ts or ts < since_daily or not who:
+            return
+        row = daily.setdefault(day_of(ts), {}).setdefault(str(who), [0, 0, 0, 0, 0, 0])
+        row[idx] += 1  # 0 звонки, 1 разговоры, 2 комментарии, 3 подборы, 4 торги, 5 просчёты
+    deal_mgr = {d["ID"]: d["ASSIGNED_BY_ID"] for d in all_deals}
+    for c in calls:
+        s, e = ms(c.get("START_TIME")), ms(c.get("END_TIME"))
+        who = c.get("RESPONSIBLE_ID") or deal_mgr.get(c.get("OWNER_ID"))
+        bump(s, who, 0)
+        if s and e and (e - s) / 1000 >= TALK_MIN_SEC:
+            bump(s, who, 1)
+    for i, items in comments.items():
+        for c in items:
+            text = c.get("COMMENT") or ""
+            if SYSTEM_COMMENT.search(text):
+                continue
+            ts, who = ms(c.get("CREATED")), c.get("AUTHOR_ID")
+            bump(ts, who, 2)
+            if CAR_LINK.search(text):
+                bump(ts, who, 3)
+    for gid, ts, who in task_log:
+        bump(ts, who, 4 if gid == TORG_GROUP_ID else 5)
+
     return {
         "generated": now_ms,
         "portal": bx.portal,
@@ -474,6 +508,7 @@ def collect(bx, now_ms):
         "users": users,
         "deals": rows,
         "wins": win_rows,
+        "daily": daily,
         "winDays": WIN_DAYS,
         "meta": {"torg": torg_stat, "calc": calc_stat, "api_calls": bx.calls},
     }
@@ -512,21 +547,38 @@ def site_url():
     return None
 
 
-def load_history(password):
-    """Прошлые снимки берём из уже опубликованного data.enc.json — без коммитов в репозиторий."""
+def load_previous(password):
+    """Прошлые данные (снимки, статистика по дням) берём из уже опубликованного data.enc.json — без коммитов."""
     url = site_url()
     if not url or not password:
-        return []
+        return {}
     try:
         req = urllib.request.Request(f"{url}data.enc.json?t={int(time.time())}", headers={"Cache-Control": "no-cache"})
         with urllib.request.urlopen(req, timeout=30) as r:
             prev = json.loads(decrypt(json.loads(r.read().decode()), password))
-        hist = prev.get("hist") or []
-        print(f"История: загружено снимков {len(hist)}")
-        return hist
+        print(f"История: загружено снимков {len(prev.get('hist') or [])}, дней статистики {len(prev.get('daily') or {})}")
+        return prev
     except Exception as e:  # первый запуск, смена пароля, сайт недоступен
         print(f"История: начинаем заново ({type(e).__name__})")
-        return []
+        return {}
+
+
+def merge_daily(prev, cur, now_ms):
+    """Сегодня и вчера пересчитываем; более ранние дни берём из прошлых данных —
+    тогда в них остаются клиенты, которые с тех пор ушли из депозитов."""
+    from zoneinfo import ZoneInfo
+    kyiv = ZoneInfo("Europe/Kyiv")
+    today = dt.datetime.fromtimestamp(now_ms / 1000, kyiv).date()
+    keep_from = (today - dt.timedelta(days=DAILY_DAYS)).isoformat()
+    fresh_from = (today - dt.timedelta(days=1)).isoformat()
+    out = {}
+    for day, v in (prev or {}).items():
+        if keep_from <= day < fresh_from:
+            out[day] = v
+    for day, v in cur.items():
+        if day >= fresh_from or day not in out:
+            out[day] = v
+    return {d: out[d] for d in sorted(out) if d >= keep_from}
 
 
 def snapshot(data):
@@ -563,7 +615,9 @@ def main():
     t0 = time.time()
     data = collect(bx, now_ms)
     password = os.environ.get("DASH_PASSWORD")
-    data["hist"] = merge_history(load_history(password), snapshot(data))
+    prev = load_previous(password)
+    data["hist"] = merge_history(prev.get("hist") or [], snapshot(data))
+    data["daily"] = merge_daily(prev.get("daily"), data.get("daily") or {}, now_ms)
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
     os.makedirs(SITE_DIR, exist_ok=True)
     enc_path, plain_path = os.path.join(SITE_DIR, "data.enc.json"), os.path.join(SITE_DIR, "data.json")
