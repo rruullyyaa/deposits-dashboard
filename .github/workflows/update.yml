@@ -9,16 +9,16 @@ on:
 
 permissions:
   contents: write   # нужен только для ежемесячного keepalive-коммита
+  actions: write    # чтобы запуск сам ставил следующий (расписание GitHub срабатывает раз в 4–8 ч)
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     timeout-minutes: 20
     environment:
       name: github-pages
@@ -51,11 +51,39 @@ jobs:
       # GitHub отключает расписание, если в публичном репозитории 60 дней не было коммитов.
       # Раз в месяц (1-го числа, около 00:07 UTC) делаем пустой коммит, чтобы этого не случилось.
       - name: Keepalive
-        if: github.event_name == 'schedule'
+        if: github.event_name != 'push'
         run: |
           if [ "$(date -u +%d%H)" = "0100" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit --allow-empty -m "keepalive $(date -u +%Y-%m)"
             git push
+          fi
+
+  # Расписание GitHub ненадёжно (часто пропускает часы), поэтому каждый запуск
+  # дожидается следующего часа и сам запускает следующий. Расписание выше остаётся
+  # запасным: если цепочка оборвётся, оно её перезапустит.
+  next:
+    needs: update
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Ждём следующего часа и запускаем обновление
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          now=$(date -u +%s)
+          next=$(( (now / 3600 + 1) * 3600 + 120 ))   # следующий час, :02 UTC
+          echo "Ждём до $(date -u -d @$next +%H:%M) UTC"
+          sleep $(( next - now ))
+          # продолжает цепочку только самый новый запуск — так она не раздваивается
+          newer=$(gh run list --workflow update.yml --limit 20 --json databaseId,status \
+            --jq '[.[] | select(.databaseId > ${{ github.run_id }} and .status != "completed")] | length')
+          if [ "$newer" = "0" ]; then
+            gh workflow run update.yml --ref main
+            echo "Следующее обновление запущено"
+          else
+            echo "Есть более новый запуск — он продолжит цепочку"
           fi
