@@ -322,6 +322,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&
 
 const fmtDate=t=>new Date(t).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
 document.getElementById('genAt').textContent=fmtDate(NOW)+' (Киев)';
+{ const lag=(Date.now()-NOW)/3600000; if(lag>2){ const g=document.getElementById('genAt'); g.textContent+=` — ${Math.floor(lag)} ч назад, данные устарели`; g.style.color='#b42318'; } }
 
 // ---- derived
 function lastOf(d,k){ if(k==='call') return st.talkOnly? d.call.lastTalk : d.call.last; return d[k].last; }
