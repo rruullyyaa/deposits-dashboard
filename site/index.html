@@ -177,6 +177,11 @@ body.compact .ttl{display:none}
 .seg2 button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
 .seg2 button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 @media (max-width:700px){ .rtbl .hide-m{display:none} }
+/* v7: по дням */
+.bars{width:100%;height:auto;display:block}
+.bars text{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink3)}
+tr.today td{background:#fbf8ee}
+tr.wknd td{color:var(--ink3)}
 /* v6: аналитика */
 .an-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 12px}
 .an-tile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fcfcfa}
@@ -558,13 +563,65 @@ function drawRating(rows){
 }
 
 // ---- аналитика: средние на клиента
-st.anBy='m';
+st.anBy='m'; st.anMode='avg'; st.dayP=14; st.dayM=0;
+const DM=[{n:'Звонков'},{n:'Разговоров',h:'звонков от 30 с'},{n:'Комментариев'},{n:'Подборов'},{n:'Торгов',h:'все задачи в «1.2 Торги»'},{n:'Просчётов',h:'все задачи в «1.1 Расчет ремонта»'}];
+const anSwitch=()=>`<div class="tabs" style="margin:0 0 12px"><span class="seg2"><button data-am="avg" class="${st.anMode==='avg'?'on':''}">Средние на клиента</button><button data-am="day" class="${st.anMode==='day'?'on':''}">По дням</button></span></div>`;
+function bindAnSwitch(rows){ vbox.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{st.anMode=b.dataset.am; drawAnal(rows);}); }
+function dayKey(ts){ return new Date(ts).toLocaleDateString('sv-SE',{timeZone:'Europe/Kiev'}); }
+function drawDaily(rows){
+  const daily=D.daily||{}, P=st.dayP, DAYMS=86400000;
+  const days=[]; for(let i=P-1;i>=0;i--) days.push(dayKey(NOW-i*DAYMS));
+  const today=dayKey(NOW);
+  const okU=m=>{ const u=U[m]; return u&&u.team&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||m===st.mgr); };
+  const perDay=days.map(d=>{ const v=[0,0,0,0,0,0]; Object.entries(daily[d]||{}).forEach(([m,a])=>{ if(okU(m)) a.forEach((x,i)=>v[i]+=x); }); return {d,v}; });
+  const full=perDay.filter(p=>p.d!==today), work=full.filter(p=>p.v.some(x=>x>0));
+  const avg=i=>work.length?work.reduce((s,p)=>s+p.v[i],0)/work.length:null;
+  const tdy=perDay.find(p=>p.d===today)||{v:[0,0,0,0,0,0]};
+  const wd=d=>new Date(d+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
+  const dm=d=>d.slice(8,10)+'.'+d.slice(5,7);
+  const isWk=d=>{ const g=new Date(d+'T12:00:00').getDay(); return g===0||g===6; };
+  // столбики по выбранному показателю
+  const W=820,H=220,L=40,Rr=10,T=12,B=30, n=perDay.length, bw=(W-L-Rr)/n;
+  let mx=Math.max(1,...perDay.map(p=>p.v[st.dayM])); const stp=[1,2,5,10,20,25,50,100,200,250,500,1000].find(s=>s*4>=mx)||Math.ceil(mx/4); mx=stp*4;
+  const y=v=>T+(H-T-B)*(1-v/mx);
+  let svg=`<svg class="bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${DM[st.dayM].n} по дням">`;
+  [0,1,2,3,4].forEach(i=>{const v=i*stp; svg+=`<line x1="${L}" x2="${W-Rr}" y1="${y(v)}" y2="${y(v)}" stroke="#ecebe6"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;});
+  perDay.forEach((p,i)=>{ const x=L+i*bw+bw*0.15, w=bw*0.7, v=p.v[st.dayM]; const col=p.d===today?'#c9d8f6':isWk(p.d)?'#b9c7e6':'#3b6fd4';
+    svg+=`<rect x="${x}" y="${y(v)}" width="${w}" height="${Math.max(0,H-B-y(v))}" rx="3" fill="${col}"><title>${dm(p.d)} (${wd(p.d)}): ${v}${p.d===today?' — день ещё идёт':''}</title></rect>`;
+    if(n<=16||i%2===0) svg+=`<text x="${x+w/2}" y="${H-12}" text-anchor="middle">${dm(p.d)}</text>`; });
+  svg+='</svg>';
+  // по менеджерам / офисам за период
+  const agg=new Map();
+  days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,a])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); a.forEach((x,i)=>g.v[i]+=x); if(d!==today&&a.some(x=>x>0)) g.act.add(d); }));
+  const lab=k=>st.anBy==='m'?esc(U[k].n):esc(k);
+  const aggRows=[...agg.entries()].sort((a,b)=>b[1].v[0]-a[1].v[0]).map(([k,g])=>`<tr><td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc(U[k].office)}</td>`:''}<td class="num">${g.act.size}</td>${g.v.map((x,i)=>`<td class="num">${x}<span class="cnt">${g.act.size?f1(x/g.act.size)+'/д':''}</span></td>`).join('')}</tr>`).join('');
+  vbox.innerHTML=anSwitch()+`
+  <div class="card"><div class="vb-h"><h3>Сколько всего за день</h3><span class="muted small">по выбранным отделу / офису / менеджеру</span><span style="flex:1"></span>
+    <span class="seg2">${[7,14,30].map(v=>`<button data-dp="${v}" class="${st.dayP===v?'on':''}">${v} дней</button>`).join('')}</span></div>
+    <div class="an-tiles">${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${st.dayM===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(avg(i))}</div><div class="l">${m.n} в день</div><div class="s">сегодня пока: ${tdy.v[i]}</div></div>`).join('')}</div>
+    <div class="lg"><span><i style="background:#3b6fd4"></i>${DM[st.dayM].n} — будни</span><span><i style="background:#b9c7e6"></i>выходные</span><span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span><span class="muted">клик по плитке — сменить показатель</span></div>
+    ${svg}</div>
+  <div class="card"><div class="vb-h"><h3>По дням</h3></div>
+    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>
+    ${perDay.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dm(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}</span></td>${p.v.map(x=>`<td class="num">${x}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div></div>
+  <div class="card"><div class="vb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'} за ${P} дней</h3><span class="muted small">всего и в среднем за рабочий день</span><span style="flex:1"></span>
+    <span class="seg2"><button data-by="m" class="${st.anBy==='m'?'on':''}">по менеджерам</button><button data-by="o" class="${st.anBy==='o'?'on':''}">по офисам</button></span></div>
+    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}<th class="num" title="Дней, когда было хоть одно действие">Раб. дней</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>${aggRows||'<tr><td class="empty" colspan="9">Нет данных</td></tr>'}</tbody></table></div></div>
+  <div class="note">Звонки, разговоры (от 30 с), комментарии и подборы — по клиентам-депозитам и выигранным сделкам, засчитываются тому, кто звонил или писал. Торги и просчёты — все задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», засчитываются тому, кто поставил задачу. «В среднем в день» — по дням, когда было хоть одно действие (сегодня не учитывается). Фильтры по стадиям и направлению здесь не применяются. Статистика по дням копится с 16.11.2026 и хранится ${D.daily?Object.keys(D.daily).length:0} дн.</div>`;
+  bindAnSwitch(rows);
+  vbox.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>{st.dayP=+b.dataset.dp; drawDaily(rows);});
+  vbox.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{st.dayM=+b.dataset.dm; drawDaily(rows);});
+  vbox.querySelectorAll('[data-by]').forEach(b=>b.onclick=()=>{st.anBy=b.dataset.by; drawDaily(rows);});
+  vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; } else st.office=e.dataset.k; fillSelects(); render(); });
+}
 const AK=[{k:'torg',n:'Торгов',usa:1},{k:'calc',n:'Просчётов',usa:1},{k:'sel',n:'Подборов'},{k:'talk',n:'Разговоров',h:'звонков от 30 с'},{k:'call',n:'Звонков',h:'все звонки'},{k:'com',n:'Комментариев'}];
 const f1=v=>v==null||isNaN(v)?'—':(Math.round(v*10)/10).toLocaleString('ru-RU');
 function avgOf(list,k){ const a=list.filter(x=>!(k==='torg'||k==='calc')||(x.dir||'usa')==='usa'); return a.length?a.reduce((s,x)=>s+((x.tot||{})[k]||0),0)/a.length:null; }
 function zeroShare(list,k){ const a=list.filter(x=>!(k==='torg'||k==='calc')||(x.dir||'usa')==='usa'); return a.length?a.filter(x=>!((x.tot||{})[k])).length/a.length*100:null; }
 function winScope(){ return (D.wins||[]).filter(w=>{ const u=U[w.m]||{grp:'',office:'—'}; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(w.m)===st.mgr)&&(!st.dir||(w.dir||'usa')===st.dir); }); }
 function drawAnal(rows){
+  if(st.anMode==='day') return drawDaily(rows);
   const dep=rows.filter(d=>d.tot); const wins=winScope();
   const days=l=>{ const a=l.filter(x=>x.ds); return a.length?a.reduce((s,x)=>s+((x.won||NOW)-x.ds)/DAY,0)/a.length:null; };
   const tiles=(l,extra)=>`<div class="an-tiles">${extra}${AK.map(a=>`<div class="an-tile" title="${a.usa?'Только депозиты на США/Канаду. ':''}${a.h||''}"><div class="v">${f1(avgOf(l,a.k))}</div><div class="l">${a.n} на клиента${a.usa?' · США':''}</div><div class="s">без единого: ${f1(zeroShare(l,a.k))}%</div></div>`).join('')}</div>`;
@@ -576,7 +633,7 @@ function drawAnal(rows){
     return `<tr><td><span class="mgr-link" data-k="${esc(k)}">${label(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc((U[k]||{}).office||'')}</td>`:''}<td class="num">${l.length}</td><td class="num">${f1(days(l))}</td>${AK.map(a=>`<td class="num">${f1(avgOf(l,a.k))}</td>`).join('')}<td class="num hide-m">${usa.length&&tg?f1(usa.length/tg*100)+'%':'—'}</td></tr>`; }).join('');
   const head=(extra)=>`<thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}${extra}${AK.map(a=>`<th class="num" title="${a.h||''}">${a.n}${a.usa?' (США)':''}</th>`).join('')}</tr></thead>`;
   const wd=D.winDays||30, usaW=wins.filter(x=>(x.dir||'usa')==='usa'), tgW=usaW.reduce((s,x)=>s+x.tot.torg,0);
-  vbox.innerHTML=`
+  vbox.innerHTML=anSwitch()+`
   <div class="card"><div class="vb-h"><h3>Депозиты в работе — в среднем на клиента</h3><span class="muted small">с момента попадания в депозит · ${dep.length} депозитов</span><span style="flex:1"></span>
     <span class="seg2"><button data-by="m" class="${st.anBy==='m'?'on':''}">по менеджерам</button><button data-by="o" class="${st.anBy==='o'?'on':''}">по офисам</button></span></div>
     ${tiles(dep,`<div class="an-tile"><div class="v">${f1(days(dep))}</div><div class="l">дней в депозите</div><div class="s">в среднем сейчас</div></div>`)}
@@ -585,6 +642,7 @@ function drawAnal(rows){
     ${tiles(wins,`<div class="an-tile"><div class="v">${wins.length}</div><div class="l">выигрышей</div><div class="s">за ${wd} дней</div></div><div class="an-tile"><div class="v">${f1(days(wins))}</div><div class="l">дней от депозита до выигрыша</div><div class="s">в среднем</div></div><div class="an-tile" title="Сколько выигрышей приходится на 100 торгов (только США/Канада)"><div class="v">${usaW.length&&tgW?f1(usaW.length/tgW*100)+'%':'—'}</div><div class="l">конверсия торгов в выигрыш</div><div class="s">${tgW} торгов → ${usaW.length} выигр. (США)</div></div>`)}
     <div class="rtbl-wrap"><table class="rtbl">${head('<th class="num">Выигрышей</th><th class="num">Дней до выигр.</th>').replace('</tr></thead>','<th class="num hide-m">Конверсия торгов</th></tr></thead>')}<tbody>${winTbl||'<tr><td class="empty" colspan="10">Нет выигрышей под эти условия</td></tr>'}</tbody></table></div></div>
   <div class="note">Считается по сделке с момента, когда она впервые попала в депозитные стадии (для выигранных — до момента выигрыша). Торги и просчёты — только для направления США/Канада. История в Bitrix24 — с переноса из amoCRM (~20.09.2026), поэтому у старых депозитов часть действий до переноса не видна. Фильтры по отделу, офису, менеджеру и направлению применяются и здесь.</div>`;
+  bindAnSwitch(rows);
   vbox.querySelectorAll('[data-by]').forEach(b=>b.onclick=()=>{st.anBy=b.dataset.by; drawAnal(rows);});
   vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=(U[st.mgr]||{}).office||''; st.grp=(U[st.mgr]||{}).grp||''; } else st.office=e.dataset.k; fillSelects(); render(); });
 }
