@@ -177,6 +177,13 @@ body.compact .ttl{display:none}
 .seg2 button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer;color:var(--ink2)}
 .seg2 button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 @media (max-width:700px){ .rtbl .hide-m{display:none} }
+/* v6: аналитика */
+.an-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 12px}
+.an-tile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fcfcfa}
+.an-tile .v{font-size:24px;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.an-tile .l{font-size:12px;color:var(--ink2)}
+.an-tile .s{font-size:11px;color:var(--ink3);margin-top:2px}
+.rtbl td.num,.rtbl th.num{text-align:right;font-variant-numeric:tabular-nums}
 /* v5: направление */
 .dirtag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:6px;margin-left:6px;vertical-align:1px;background:#eef1f6;color:#4a5876}
 .dirtag.kor{background:#e9f3ff;color:#2f6db5}.dirtag.chn{background:#fdecea;color:#b4402f}.dirtag.eur{background:#eef0ff;color:#4b52b3}
@@ -236,6 +243,7 @@ body.compact .ttl{display:none}
     <button class="chip" data-view="offices">По офисам</button>
     <button class="chip" data-view="rating">Рейтинг</button>
     <button class="chip" data-view="trend">Динамика</button>
+    <button class="chip" data-view="anal">Аналитика</button>
     <span class="sp"></span>
     <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
     <button class="chip" type="button" id="tblToggle"></button>
@@ -326,7 +334,7 @@ function badCount(d){ return CV().reduce((s,c)=>s+(isBad(d,c.k)?1:0),0); }
 const grpSel=document.getElementById('fGrp'), offSel=document.getElementById('fOffice'), mgrSel=document.getElementById('fMgr');
 function uniq(a){return [...new Set(a)].sort((x,y)=>x.localeCompare(y,'ru'))}
 function fillSelects(){
-  const mgrIds=uniq(D.deals.map(d=>String(d.m)));
+  const mgrIds=uniq([...D.deals.map(d=>String(d.m)), ...Object.keys(U).filter(id=>U[id].team)]);
   const grps=uniq(mgrIds.map(id=>U[id].grp));
   grpSel.innerHTML='<option value="">Все отделы</option>'+grps.map(g=>`<option ${g===st.grp?'selected':''}>${g}</option>`).join('');
   const offs=uniq(mgrIds.filter(id=>!st.grp||U[id].grp===st.grp).map(id=>U[id].office));
@@ -527,8 +535,10 @@ function drawRating(rows){
   const tc=teamScores(cur), tY=teamScores(prevY), tW=teamScores(prevW);
   const crit=CV();
   const mini=l=>`<span class="minibar">${crit.map(c=>{const a=l.filter(d=>applies(d,c.k)); if(!a.length) return `<span class="ago na" title="${c.name}: нет депозитов на США">${c.sh} —</span>`; const ok=a.filter(d=>!isBad(d,c.k)).length/a.length*100; return `<span class="ago ${idxCls(ok)}" title="${c.name}: ${Math.round(ok)}% депозитов в норме">${c.sh} ${Math.round(ok)}</span>`;}).join('')}</span>`;
-  const teams=[...tc.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1));
-  const mgrs=[...cur.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1)||b[1].n-a[1].n);
+  const teams=[...tc.entries()].filter(([o,v])=>v.n>0).sort((a,b)=>(b[1].s??-1)-(a[1].s??-1));
+  const zero=Object.keys(U).filter(id=>U[id].team&&!cur.has(id)&&(!st.grp||U[id].grp===st.grp)&&(!st.office||U[id].office===st.office)&&(!st.mgr||id===st.mgr));
+  zero.forEach(id=>cur.set(id,{n:0,s:null,l:[]}));
+  const mgrs=[...cur.entries()].sort((a,b)=>(b[1].s??-1)-(a[1].s??-1)||b[1].n-a[1].n||U[a[0]].n.localeCompare(U[b[0]].n,'ru'));
   const note=`Индекс — среднее по включённым критериям доли депозитов без просрочки (при текущих порогах). 100 — всё в норме. Индекс команды — среднее индексов её менеджеров.${sW?'':' Изменение за неделю появится, когда накопится история (сбор начат 14.11).'}`;
   vbox.innerHTML=`
   <div class="card"><div class="vb-h"><h3>Рейтинг команд</h3><span class="muted small">${teams.length} команд</span></div>
@@ -539,11 +549,43 @@ function drawRating(rows){
   </tbody></table></div></div>
   <div class="card"><div class="vb-h"><h3>Рейтинг менеджеров</h3><span class="muted small">${mgrs.length} менеджеров</span></div>
   <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>#</th><th>Менеджер</th><th class="hide-m">Офис</th><th>Индекс</th><th>к вчера</th><th>за неделю</th><th class="num">Депозитов</th><th class="hide-m">% в норме по критериям</th></tr></thead><tbody>
-  ${mgrs.map(([m,v],i)=>`<tr><td class="rk">${i+1}</td><td><span class="mgr-link" data-m="${m}">${esc(U[m].n)}</span></td><td class="small hide-m">${esc(U[m].office)}</td><td><span class="idx ${idxCls(v.s)}">${fmtIdx(v.s)}</span></td><td>${dlt(v.s,prevY.get(m)?.s)}</td><td>${dlt(v.s,prevW.get(m)?.s)}</td><td class="num">${v.n}</td><td class="hide-m">${mini(v.l)}</td></tr>`).join('')}
+  ${mgrs.map(([m,v],i)=>`<tr><td class="rk">${i+1}</td><td><span class="mgr-link" data-m="${m}">${esc(U[m].n)}</span></td><td class="small hide-m">${esc(U[m].office)}</td><td><span class="idx ${idxCls(v.s)}">${fmtIdx(v.s)}</span></td><td>${dlt(v.s,prevY.get(m)?.s)}</td><td>${dlt(v.s,prevW.get(m)?.s)}</td><td class="num">${v.n}</td><td class="hide-m">${v.n?mini(v.l):'<span class="muted small">нет депозитов в работе</span>'}</td></tr>`).join('')}
   </tbody></table></div></div>
   <div class="note">${note}</div>`;
   vbox.querySelectorAll('[data-m]').forEach(e=>e.onclick=()=>{st.mgr=e.dataset.m; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; fillSelects(); setView('deals');});
   vbox.querySelectorAll('[data-o]').forEach(e=>e.onclick=()=>{st.office=e.dataset.o; fillSelects(); setView('rating');});
+}
+
+// ---- аналитика: средние на клиента
+st.anBy='m';
+const AK=[{k:'torg',n:'Торгов',usa:1},{k:'calc',n:'Просчётов',usa:1},{k:'sel',n:'Подборов'},{k:'talk',n:'Разговоров',h:'звонков от 30 с'},{k:'call',n:'Звонков',h:'все звонки'},{k:'com',n:'Комментариев'}];
+const f1=v=>v==null||isNaN(v)?'—':(Math.round(v*10)/10).toLocaleString('ru-RU');
+function avgOf(list,k){ const a=list.filter(x=>!(k==='torg'||k==='calc')||(x.dir||'usa')==='usa'); return a.length?a.reduce((s,x)=>s+((x.tot||{})[k]||0),0)/a.length:null; }
+function zeroShare(list,k){ const a=list.filter(x=>!(k==='torg'||k==='calc')||(x.dir||'usa')==='usa'); return a.length?a.filter(x=>!((x.tot||{})[k])).length/a.length*100:null; }
+function winScope(){ return (D.wins||[]).filter(w=>{ const u=U[w.m]||{grp:'',office:'—'}; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||String(w.m)===st.mgr)&&(!st.dir||(w.dir||'usa')===st.dir); }); }
+function drawAnal(rows){
+  const dep=rows.filter(d=>d.tot); const wins=winScope();
+  const days=l=>{ const a=l.filter(x=>x.ds); return a.length?a.reduce((s,x)=>s+((x.won||NOW)-x.ds)/DAY,0)/a.length:null; };
+  const tiles=(l,extra)=>`<div class="an-tiles">${extra}${AK.map(a=>`<div class="an-tile" title="${a.usa?'Только депозиты на США/Канаду. ':''}${a.h||''}"><div class="v">${f1(avgOf(l,a.k))}</div><div class="l">${a.n} на клиента${a.usa?' · США':''}</div><div class="s">без единого: ${f1(zeroShare(l,a.k))}%</div></div>`).join('')}</div>`;
+  const key=x=>st.anBy==='m'?String(x.m):(U[x.m]||{}).office||'—';
+  const label=k=>st.anBy==='m'?esc((U[k]||{n:'ID '+k}).n):esc(k);
+  const groupT=(l)=>{ const m=new Map(); l.forEach(x=>{const k=key(x); if(!m.has(k)) m.set(k,[]); m.get(k).push(x);}); return [...m.entries()].sort((a,b)=>b[1].length-a[1].length); };
+  const depTbl=groupT(dep).map(([k,l])=>`<tr><td><span class="mgr-link" data-k="${esc(k)}">${label(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc((U[k]||{}).office||'')}</td>`:''}<td class="num">${l.length}</td><td class="num">${f1(days(l))}</td>${AK.map(a=>`<td class="num">${f1(avgOf(l,a.k))}</td>`).join('')}</tr>`).join('');
+  const winTbl=groupT(wins).map(([k,l])=>{ const usa=l.filter(x=>(x.dir||'usa')==='usa'); const tg=usa.reduce((s,x)=>s+x.tot.torg,0);
+    return `<tr><td><span class="mgr-link" data-k="${esc(k)}">${label(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc((U[k]||{}).office||'')}</td>`:''}<td class="num">${l.length}</td><td class="num">${f1(days(l))}</td>${AK.map(a=>`<td class="num">${f1(avgOf(l,a.k))}</td>`).join('')}<td class="num hide-m">${usa.length&&tg?f1(usa.length/tg*100)+'%':'—'}</td></tr>`; }).join('');
+  const head=(extra)=>`<thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}${extra}${AK.map(a=>`<th class="num" title="${a.h||''}">${a.n}${a.usa?' (США)':''}</th>`).join('')}</tr></thead>`;
+  const wd=D.winDays||30, usaW=wins.filter(x=>(x.dir||'usa')==='usa'), tgW=usaW.reduce((s,x)=>s+x.tot.torg,0);
+  vbox.innerHTML=`
+  <div class="card"><div class="vb-h"><h3>Депозиты в работе — в среднем на клиента</h3><span class="muted small">с момента попадания в депозит · ${dep.length} депозитов</span><span style="flex:1"></span>
+    <span class="seg2"><button data-by="m" class="${st.anBy==='m'?'on':''}">по менеджерам</button><button data-by="o" class="${st.anBy==='o'?'on':''}">по офисам</button></span></div>
+    ${tiles(dep,`<div class="an-tile"><div class="v">${f1(days(dep))}</div><div class="l">дней в депозите</div><div class="s">в среднем сейчас</div></div>`)}
+    <div class="rtbl-wrap"><table class="rtbl">${head('<th class="num">Депозитов</th><th class="num">Дней в деп.</th>')}<tbody>${depTbl||'<tr><td class="empty" colspan="9">Нет депозитов под эти условия</td></tr>'}</tbody></table></div></div>
+  <div class="card"><div class="vb-h"><h3>Выигранные за ${wd} дней — что понадобилось до выигрыша</h3><span class="muted small">сделки, перешедшие в «Выиграли — ждём оплату» · ${wins.length} шт.</span></div>
+    ${tiles(wins,`<div class="an-tile"><div class="v">${wins.length}</div><div class="l">выигрышей</div><div class="s">за ${wd} дней</div></div><div class="an-tile"><div class="v">${f1(days(wins))}</div><div class="l">дней от депозита до выигрыша</div><div class="s">в среднем</div></div><div class="an-tile" title="Сколько выигрышей приходится на 100 торгов (только США/Канада)"><div class="v">${usaW.length&&tgW?f1(usaW.length/tgW*100)+'%':'—'}</div><div class="l">конверсия торгов в выигрыш</div><div class="s">${tgW} торгов → ${usaW.length} выигр. (США)</div></div>`)}
+    <div class="rtbl-wrap"><table class="rtbl">${head('<th class="num">Выигрышей</th><th class="num">Дней до выигр.</th>').replace('</tr></thead>','<th class="num hide-m">Конверсия торгов</th></tr></thead>')}<tbody>${winTbl||'<tr><td class="empty" colspan="10">Нет выигрышей под эти условия</td></tr>'}</tbody></table></div></div>
+  <div class="note">Считается по сделке с момента, когда она впервые попала в депозитные стадии (для выигранных — до момента выигрыша). Торги и просчёты — только для направления США/Канада. История в Bitrix24 — с переноса из amoCRM (~20.09.2026), поэтому у старых депозитов часть действий до переноса не видна. Фильтры по отделу, офису, менеджеру и направлению применяются и здесь.</div>`;
+  vbox.querySelectorAll('[data-by]').forEach(b=>b.onclick=()=>{st.anBy=b.dataset.by; drawAnal(rows);});
+  vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=(U[st.mgr]||{}).office||''; st.grp=(U[st.mgr]||{}).grp||''; } else st.office=e.dataset.k; fillSelects(); render(); });
 }
 
 const CCOL={call:'#3b6fd4',com:'#d99a1e',sel:'#3e9b4f',torg:'#d9542b',calc:'#8a5cc7'};
@@ -583,10 +625,10 @@ function render(){
   const rows=scoped();
   drawTiles(rows);
   const shown=rows.filter(passesActive);
-  const special=st.view==='rating'||st.view==='trend';
+  const special=st.view==='rating'||st.view==='trend'||st.view==='anal';
   document.getElementById('tblWrap').style.display=special?'none':''; vbox.style.display=special?'':'none';
-  document.getElementById('tools').style.display=st.view==='trend'?'none':'';
-  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
+  document.getElementById('tools').style.display=(st.view==='trend'||st.view==='anal')?'none':'';
+  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else if(st.view==='anal') drawAnal(rows); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
 }
 
 document.getElementById('note').innerHTML=`
