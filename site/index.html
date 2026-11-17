@@ -200,6 +200,10 @@ table.cmp th.grp{text-align:center;border-bottom:1px solid var(--line)}
 table.cmp td.gap,table.cmp th.gap{width:10px;padding:0;background:transparent}
 table.cmp tr.dep-row td{background:#f4f7fd}
 table.cmp td .dl{font-size:12px}
+.tb-h{align-items:center;gap:8px 10px}
+table.one td.gl,table.one th.gl{border-left:1px solid var(--line)}
+table.one td.muted,table.one th.muted{color:var(--ink3)}
+table.one td .dl{font-size:12px}
 .an-tile.dep-tile{background:#f4f7fd}
 .an-tile .s.today-s{color:var(--ink2);margin-top:4px}
 .an-tile .s.today-s b{color:var(--ink);font-size:13px}
@@ -586,7 +590,7 @@ function drawRating(rows){
 }
 
 // ---- аналитика: средние на клиента
-st.anBy='m'; st.anMode='avg'; st.dayM=0; st.dPre='14'; st.dFrom=null; st.dTo=null; st.cmp='prev'; st.cFrom=null; st.cTo=null;
+st.anBy='m'; st.anMode='avg'; st.dayM=0; st.dPre='14'; st.dayAll=false; st.mgrAll=false; st.dFrom=null; st.dTo=null; st.cmp='prev'; st.cFrom=null; st.cTo=null;
 const DM=[{n:'Звонков'},{n:'Разговоров',h:'звонков от 30 с'},{n:'Комментариев'},{n:'Подборов'},{n:'Торгов',h:'все задачи в «1.2 Торги»'},{n:'Просчётов',h:'все задачи в «1.1 Расчет ремонта»'}];
 const anSwitch=()=>`<div class="tabs" style="margin:0 0 12px"><span class="seg2"><button data-am="avg" class="${st.anMode==='avg'?'on':''}">Средние на клиента</button><button data-am="day" class="${st.anMode==='day'?'on':''}">По дням</button></span></div>`;
 function bindAnSwitch(rows){ vbox.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{st.anMode=b.dataset.am; drawAnal(rows);}); }
@@ -683,8 +687,49 @@ function drawDaily(rows){
   const aggRows=[...S.agg.entries()].sort((x,y)=>y[1].v[0]-x[1].v[0]).map(([k,g])=>{ const o=C&&C.agg.get(k), na=g.act.size, oa=o?o.act.size:0;
     return `<tr><td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc(U[k].office)}</td>`:''}<td class="num" ${C?`title="было ${oa}"`:''}>${na}</td><td class="num" ${C?`title="было в среднем ${o&&o.dpAvg!=null?f1(o.dpAvg):'—'}"`:''}>${g.dpAvg!=null?f1(g.dpAvg):'—'}${C?' '+(dlt(g.dpAvg,o?o.dpAvg:null)||''):''}</td>${g.v.map((x,i)=>{ const cur=na?g.w[i]/na:null, old=oa?o.w[i]/oa:null;
       return `<td class="num" ${C?`title="было ${old!=null?f1(old)+' в день, всего '+o.v[i]:'—'}"`:''}>${x}<span class="cnt">${cur!=null?f1(cur)+'/д':''}</span>${C?' '+(dlt(cur,old)||'<span class="dl">—</span>'):''}</td>`; }).join('')}</tr>`; }).join('');
-  const dateIn=(id,v)=>`<input type="date" class="din" id="${id}" value="${v}" min="${first}" max="${today}">`;
   const sumRow=(t,v,cls='')=>`<tr class="${cls}"><td><b>${t}</b></td>${v.map(x=>`<td class="num"><b>${x==null?'—':typeof x==='number'?f1(x):x}</b></td>`).join('')}</tr>`;
+  const dayTblAll=`    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th><th class="num" title="Депозитов в работе на конец дня">Депозитов</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>
+    ${sumRow('Всего за период',['—',...S.tot],'sum')}${sumRow('В среднем за рабочий день',[S.depAvg,...S.avg],'sum')}
+    ${S.per.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dFmt(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}${p.d<EXACT_FROM&&!p.nd?' · ≈':''}</span></td><td class="num">${p.dp??'—'}</td>${p.v.map(x=>`<td class="num">${p.nd?'—':x}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>`;
+  const mgrTblAll=`    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}<th class="num" title="Дней, когда было хоть одно действие">Раб. дней</th><th class="num" title="Сколько депозитов было в работе — в среднем по дням периода">Депозитов</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>${aggRows||'<tr><td class="empty" colspan="10">Нет данных</td></tr>'}</tbody></table></div>`;
+  // ---- таблицы «по дням» и «по менеджерам»: один выбранный показатель или все
+  const MOPT=[[6,'Депозиты в работе'],...DSH.map((n,i)=>[i,n])];
+  const mSel=`<select class="din" data-msel title="Какой показатель показать">${MOPT.map(([v,n])=>`<option value="${v}" ${M===v?'selected':''}>${n}</option>`).join('')}</select>`;
+  const modeSw=key=>`<span class="seg2"><button data-tm="${key}:0" class="${!st[key]?'on':''}">Один показатель</button><button data-tm="${key}:1" class="${st[key]?'on':''}">Все показатели</button></span>`;
+  const NM=M===6?'Депозиты':DSH[M], th=(x,cls='num',ti='')=>`<th class="${cls}" ${ti?`title="${ti}"`:''}>${x}</th>`, tdn=(x,cls='')=>`<td class="num ${cls}">${x}</td>`;
+  const dayLbl=(d,extra='')=>`${dFmt(d)} <span class="muted small">${wd(d)}${extra}</span>`;
+  let dayTbl;
+  if(st.dayAll) dayTbl=`${dayTblAll}`;
+  else if(M===6){
+    dayTbl=`<div class="rtbl-wrap"><table class="rtbl one"><thead><tr>${th('День','')}${th('Депозитов в работе','num','на конец дня')}${C?th('День сравнения','gl')+th('Было')+th('±'):''}</tr></thead><tbody>
+      <tr class="sum"><td><b>В среднем по дням</b></td>${tdn('<b>'+f1(S.depAvg)+'</b>')}${C?tdn('','gl')+tdn(f1(C.depAvg))+tdn(dlt(S.depAvg,C.depAvg)||'—'):''}</tr>
+      ${S.per.map((p,i)=>({p,cp:C&&C.per[i]})).reverse().map(({p,cp})=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dayLbl(p.d,p.d===today?' · сегодня':'')}</td>${tdn('<b>'+(p.dp??'—')+'</b>')}${C?(cp?`<td class="gl">${dayLbl(cp.d)}</td>${tdn(cp.dp??'—')}${tdn(dlt(p.dp,cp.dp)||'')}`:tdn('','gl')+tdn('')+tdn('')):''}</tr>`).join('')}
+      </tbody></table></div>`;
+  } else {
+    dayTbl=`<div class="rtbl-wrap"><table class="rtbl one"><thead><tr>${th('День','')}${th(NM)}${th('На 1 депозит','num','сколько на один депозит в работе')}${th('Депозитов','num muted','в работе на конец дня')}${C?th('День сравнения','gl')+th('Было')+th('±'):''}</tr></thead><tbody>
+      <tr class="sum"><td><b>В рабочий день</b> <span class="muted small">в среднем</span></td>${tdn('<b>'+f1(S.avg[M])+'</b>')}${tdn(f2(perDep(S.avg[M],S.depAvg)))}${tdn(f1(S.depAvg),'muted')}${C?tdn('','gl')+tdn(f1(C.avg[M]))+tdn(dlt(S.avg[M],C.avg[M])||'—'):''}</tr>
+      <tr class="sum"><td><b>Всего за период</b></td>${tdn('<b>'+S.tot[M].toLocaleString('ru-RU')+'</b>')}${tdn('')}${tdn('','muted')}${C?tdn('','gl')+tdn(C.tot[M].toLocaleString('ru-RU'))+tdn(''):''}</tr>
+      ${S.per.map((p,i)=>({p,cp:C&&C.per[i]})).reverse().map(({p,cp})=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dayLbl(p.d,(p.d===today?' · сегодня':'')+(p.d<EXACT_FROM&&!p.nd?' · ≈':''))}</td>${tdn('<b>'+(p.nd?'—':p.v[M])+'</b>')}${tdn(p.nd?'—':f2(perDep(p.v[M],p.dp)))}${tdn(p.dp??'—','muted')}${C?(cp?`<td class="gl">${dayLbl(cp.d)}</td>${tdn(cp.nd?'—':cp.v[M])}${tdn(cp.nd||p.d===today?'':dlt(p.v[M],cp.v[M])||'')}`:tdn('','gl')+tdn('')+tdn('')):''}</tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  let mgrTbl;
+  const nameCells=k=>`<td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m muted">${esc(U[k].office)}</td>`:''}`;
+  const nameHead=`${th(st.anBy==='m'?'Менеджер':'Офис','')}${st.anBy==='m'?th('Офис','hide-m'):''}`;
+  if(st.mgrAll) mgrTbl=mgrTblAll;
+  else if(M===6){
+    const rowsM=[...S.agg.entries()].map(([k,g])=>({k,g,o:C&&C.agg.get(k),n:TDs.agg.get(k)})).filter(x=>x.g.dpAvg).sort((x,y)=>y.g.dpAvg-x.g.dpAvg);
+    mgrTbl=`<div class="rtbl-wrap"><table class="rtbl one"><thead><tr>${nameHead}${th('В среднем')}${th('Сейчас')}${C?th('Было в среднем','gl')+th('±'):''}</tr></thead><tbody>
+      ${rowsM.map(({k,g,o,n})=>`<tr>${nameCells(k)}${tdn('<b>'+f1(g.dpAvg)+'</b>')}${tdn(n&&n.dpAvg!=null?f1(n.dpAvg):'0')}${C?tdn(o&&o.dpAvg!=null?f1(o.dpAvg):'—','gl')+tdn(dlt(g.dpAvg,o?o.dpAvg:null)||'—'):''}</tr>`).join('')||'<tr><td class="empty" colspan="6">Нет данных</td></tr>'}
+      </tbody></table></div>`;
+  } else {
+    const rowsM=[...S.agg.entries()].map(([k,g])=>{ const o=C&&C.agg.get(k), na=g.act.size, oa=o?o.act.size:0;
+      const cur=na?g.w[M]/na:null, old=oa?o.w[M]/oa:null; return {k,g,cur,old,pd:perDep(cur,g.dpAvg)}; }).filter(x=>x.g.v[M]||x.g.dpAvg).sort((x,y)=>(y.cur||0)-(x.cur||0)||y.g.v[M]-x.g.v[M]);
+    mgrTbl=`<div class="rtbl-wrap"><table class="rtbl one"><thead><tr>${nameHead}${th('В рабочий день','num','среднее по дням, когда было хоть одно действие')}${th('Всего')}${th('На 1 депозит','num','в рабочий день на один депозит в работе')}${th('Депозитов','num muted','в работе, в среднем')}${C?th('Было в день','gl')+th('±'):''}</tr></thead><tbody>
+      ${rowsM.map(({k,g,cur,old,pd})=>`<tr>${nameCells(k)}${tdn('<b>'+(cur!=null?f1(cur):'—')+'</b>')}${tdn(g.v[M])}${tdn(f2(pd))}${tdn(g.dpAvg!=null?f1(g.dpAvg):'—','muted')}${C?tdn(old!=null?f1(old):'—','gl')+tdn(dlt(cur,old)||'—'):''}</tr>`).join('')||'<tr><td class="empty" colspan="8">Нет данных</td></tr>'}
+      </tbody></table></div>`;
+  }
+  const dateIn=(id,v)=>`<input type="date" class="din" id="${id}" value="${v}" min="${first}" max="${today}">`;
   const warn=[]; if(S.nodata) warn.push(`за ${S.nodata} дн. выбранного периода данных нет — статистика есть с ${dFmt(first)}`); if(C&&C.nodata) warn.push(`для периода сравнения нет данных за ${C.nodata} дн. из ${C.per.length}`);
   vbox.innerHTML=anSwitch()+`
   <div class="card"><div class="vb-h" style="flex-wrap:wrap;gap:8px"><h3>Сколько всего за день</h3><span class="muted small">по выбранным отделу / офису / менеджеру</span></div>
@@ -698,14 +743,11 @@ function drawDaily(rows){
     ${cmpTable}
     <div class="lg"><span><i style="background:#3b6fd4"></i>${MN} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — показать на графике</span></div>
     ${svg}</div>
-  <div class="card"><div class="vb-h"><h3>По дням</h3><span class="muted small">${pTxt(a,b)}</span></div>
-    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th><th class="num" title="Депозитов в работе на конец дня">Депозитов</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>
-    ${sumRow('Всего за период',['—',...S.tot],'sum')}${sumRow('В среднем за рабочий день',[S.depAvg,...S.avg],'sum')}
-    ${S.per.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dFmt(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}${p.d<EXACT_FROM&&!p.nd?' · ≈':''}</span></td><td class="num">${p.dp??'—'}</td>${p.v.map(x=>`<td class="num">${p.nd?'—':x}</td>`).join('')}</tr>`).join('')}
-    </tbody></table></div></div>
-  <div class="card"><div class="vb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'} · ${pTxt(a,b)}</h3><span class="muted small">всего и в среднем за рабочий день${C?', изменение — к среднему за '+pTxt(c[0],c[1])+' (наведите на число — покажет, сколько было)':''}</span><span style="flex:1"></span>
+  <div class="card"><div class="vb-h tb-h"><h3>По дням</h3><span class="muted small">${pTxt(a,b)}</span><span style="flex:1"></span>${st.dayAll?'':mSel}${modeSw('dayAll')}</div>
+    ${dayTbl}</div>
+  <div class="card"><div class="vb-h tb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'}</h3><span class="muted small">${pTxt(a,b)}${C&&!st.mgrAll?' · сравнение с '+pTxt(c[0],c[1]):''}</span><span style="flex:1"></span>${st.mgrAll?'':mSel}${modeSw('mgrAll')}
     <span class="seg2"><button data-by="m" class="${st.anBy==='m'?'on':''}">по менеджерам</button><button data-by="o" class="${st.anBy==='o'?'on':''}">по офисам</button></span></div>
-    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}<th class="num" title="Дней, когда было хоть одно действие">Раб. дней</th><th class="num" title="Сколько депозитов было в работе — в среднем по дням периода">Депозитов</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>${aggRows||'<tr><td class="empty" colspan="10">Нет данных</td></tr>'}</tbody></table></div></div>
+    ${mgrTbl}</div>
   <div class="note">Звонки, разговоры (от 30 с), комментарии (в ленте сделки и ответы в задачах сделки) и подборы — по клиентам-депозитам и выигранным сделкам, засчитываются тому, кто звонил или писал. Торги и просчёты — все задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», засчитываются тому, кто поставил задачу. «В рабочий день» — среднее по дням, когда было хоть одно действие (сегодняшний незаконченный день не учитывается); сравнение идёт именно по этим средним, поэтому периоды разной длины сравнивать корректно. Дни до ${dFmt(EXACT_FROM)} (отмечены «≈») восстановлены задним числом: звонки, комментарии и подборы в них — только по нынешним депозитам и выигранным за последние 30 дней, поэтому могут быть занижены; торги и просчёты — полные. «Депозитов в работе» — сколько сделок было в депозитных стадиях на конец каждого дня (восстановлено по истории стадий Bitrix24, по нынешнему ответственному); среднее — по всем дням периода. «На 1 депозит» — действий в рабочий день на один депозит: так честнее сравнивать периоды, когда депозитов было разное количество. Фильтры по стадиям и направлению здесь не применяются. Данные есть с ${dFmt(first)}, хранятся больше года.</div>`;
   bindAnSwitch(rows);
   const re=()=>drawDaily(rows), val=id=>{ const e=document.getElementById(id); return e&&e.value?e.value:null; };
@@ -716,6 +758,8 @@ function drawDaily(rows){
     if(e1) e1.onchange=()=>{ st.cFrom=val('cFrom'); if(st.cFrom) st.cTo=dAdd(st.cFrom,dDiff(a,b)); re(); };  // начало сдвигает период той же длины
     if(e2) e2.onchange=()=>{ st.cTo=val('cTo'); re(); }; }
   vbox.querySelectorAll('[data-dm]').forEach(x=>x.onclick=()=>{st.dayM=+x.dataset.dm; re();});
+  vbox.querySelectorAll('[data-msel]').forEach(x=>x.onchange=()=>{st.dayM=+x.value; re();});
+  vbox.querySelectorAll('[data-tm]').forEach(x=>x.onclick=()=>{ const [k,v]=x.dataset.tm.split(':'); st[k]=v==='1'; re(); });
   vbox.querySelectorAll('[data-by]').forEach(x=>x.onclick=()=>{st.anBy=x.dataset.by; re();});
   vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; } else st.office=e.dataset.k; fillSelects(); render(); });
 }
