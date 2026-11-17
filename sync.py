@@ -257,6 +257,68 @@ def task_chat_comments(bx, deal_ids):
     return out, info
 
 
+def deposits_by_day(bx, now_ms, dep_stages, current):
+    """Сколько сделок было в депозитных стадиях на конец каждого дня (по Киеву), по ответственным.
+    Восстанавливаем по истории стадий; сегодня — текущее состояние."""
+    from zoneinfo import ZoneInfo
+    log = lambda *a: print(*a, flush=True)
+    kyiv = ZoneInfo("Europe/Kyiv")
+    dep = set(dep_stages)
+    today = dt.datetime.fromtimestamp(now_ms / 1000, kyiv).date()
+    first = today - dt.timedelta(days=DAILY_DAYS)
+    out = {}
+    try:
+        ever = {str(h["OWNER_ID"]) for h in bx.all("crm.stagehistory.list", {
+            "entityTypeId": 2, "filter": {"STAGE_ID": dep_stages}, "select": ["OWNER_ID"]})}
+        hist = {}
+        for part in chunks(sorted(ever, key=int), 50):
+            for h in bx.all("crm.stagehistory.list", {
+                    "entityTypeId": 2, "filter": {"OWNER_ID": [int(x) for x in part]},
+                    "select": ["OWNER_ID", "STAGE_ID", "CREATED_TIME"]}):
+                t = ms(h.get("CREATED_TIME"))
+                if t:
+                    hist.setdefault(str(h["OWNER_ID"]), []).append((t, str(h.get("STAGE_ID"))))
+        owner = {}
+        for part in chunks(sorted(hist, key=int), 50):
+            for d in bx.all("crm.deal.list", {"filter": {"ID": part}, "select": ["ID", "ASSIGNED_BY_ID"]}):
+                owner[str(d["ID"])] = str(d.get("ASSIGNED_BY_ID") or "")
+    except RuntimeError as e:
+        log(f"Депозиты по дням: история стадий недоступна: {e}")
+        return {}
+    # концы дней (23:59:59 по Киеву) от first до вчера
+    ends = []
+    day = first
+    while day < today:
+        e = dt.datetime.combine(day, dt.time(23, 59, 59), kyiv)
+        ends.append((day.isoformat(), int(e.timestamp() * 1000)))
+        day += dt.timedelta(days=1)
+    for i, evs in hist.items():
+        who = owner.get(i)
+        if not who:
+            continue  # сделка удалена
+        evs.sort()
+        k = 0
+        stage = None
+        for dkey, end in ends:
+            while k < len(evs) and evs[k][0] <= end:
+                stage = evs[k][1]
+                k += 1
+            if stage in dep:
+                row = out.setdefault(dkey, {})
+                row[who] = row.get(who, 0) + 1
+    cur = {}
+    for d in current:
+        w = str(d["ASSIGNED_BY_ID"])
+        cur[w] = cur.get(w, 0) + 1
+    out[today.isoformat()] = cur
+    first_ev = min((e[0] for evs in hist.values() for e in evs), default=None)
+    for dkey, end in ends:
+        if first_ev and end >= first_ev:  # до начала истории в Bitrix24 данных нет — день не заполняем
+            out.setdefault(dkey, {})
+    log(f"Депозиты по дням: сделок в истории {len(hist)}, сегодня {sum(cur.values())}")
+    return out
+
+
 def collect(bx, now_ms):
     log = lambda *a: print(*a, flush=True)
     dep_stages = [s for s, _ in STAGES]
@@ -572,6 +634,7 @@ def collect(bx, now_ms):
         "deals": rows,
         "wins": win_rows,
         "daily": daily,
+        "depd": deposits_by_day(bx, now_ms, dep_stages, deals),
         "winDays": WIN_DAYS,
         "meta": {"torg": torg_stat, "calc": calc_stat, "taskChat": task_chat_info, "api_calls": bx.calls},
     }
@@ -650,6 +713,16 @@ def merge_daily(prev, cur, now_ms):
     return {d: out[d] for d in sorted(out) if d >= keep_from}
 
 
+def merge_depd(prev, cur, now_ms):
+    """Депозиты по дням: пересчитанные дни заменяют сохранённые, более старые берём из прошлых данных."""
+    from zoneinfo import ZoneInfo
+    today = dt.datetime.fromtimestamp(now_ms / 1000, ZoneInfo("Europe/Kyiv")).date()
+    keep_from = (today - dt.timedelta(days=DAILY_KEEP_DAYS)).isoformat()
+    out = {d: v for d, v in (prev or {}).items() if d >= keep_from}
+    out.update(cur)
+    return {d: out[d] for d in sorted(out) if d >= keep_from}
+
+
 def snapshot(data):
     """Компактный снимок: возраст последнего действия в часах (-1 = не было)."""
     g = data["generated"]
@@ -687,6 +760,7 @@ def main():
     prev = load_previous(password)
     data["hist"] = merge_history(prev.get("hist") or [], snapshot(data))
     data["daily"] = merge_daily(prev.get("daily"), data.get("daily") or {}, now_ms)
+    data["depd"] = merge_depd(prev.get("depd"), data.get("depd") or {}, now_ms)
     raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode()
     os.makedirs(SITE_DIR, exist_ok=True)
     enc_path, plain_path = os.path.join(SITE_DIR, "data.enc.json"), os.path.join(SITE_DIR, "data.json")
