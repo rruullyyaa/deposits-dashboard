@@ -190,6 +190,16 @@ tr.wknd td{color:var(--ink3)}
 .an-tile .v .dl{font-size:12px;vertical-align:middle}
 .dl.up{color:#067647}.dl.down{color:#b42318}
 tr.sum td{background:#fafaf7}
+.an-tile.t2{cursor:pointer;padding:10px 12px}
+.an-tile.t2 .l{font-size:12px;color:var(--ink2);font-weight:600;margin-bottom:2px}
+.an-tile.t2 .v{font-size:26px;line-height:1.15}
+.an-tile.t2 .s{font-size:11px;margin-top:3px}
+.an-tile.sel{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset}
+.cmp-wrap{margin:0 0 14px}
+table.cmp th.grp{text-align:center;border-bottom:1px solid var(--line)}
+table.cmp td.gap,table.cmp th.gap{width:10px;padding:0;background:transparent}
+table.cmp tr.dep-row td{background:#f4f7fd}
+table.cmp td .dl{font-size:12px}
 .an-tile.dep-tile{background:#f4f7fd}
 .an-tile .s.today-s{color:var(--ink2);margin-top:4px}
 .an-tile .s.today-s b{color:var(--ink);font-size:13px}
@@ -655,6 +665,20 @@ function drawDaily(rows){
     svg+=`<rect x="${xs}" y="${y(v)}" width="${w}" height="${Math.max(0,H-B-y(v))}" rx="2" fill="${col}"><title>${dFmt(p.d)} (${wd(p.d)}): ${p.nd?'нет данных':v}${p.d===today?' — день ещё идёт':''}${cp?` · сравнение ${dFmt(cp.d)}: ${cp.nd?'нет данных':gv(cp)}`:''}</title></rect>`;
     if(i%lbEvery===0) svg+=`<text x="${x0+wAll/2}" y="${H-12}" text-anchor="middle">${dFmt(p.d).slice(0,5)}</text>`; });
   svg+='</svg>';
+  const DSH=['Звонки','Разговоры','Комментарии','Подборы','Торги','Просчёты'];
+  // таблица итогов / сравнения периодов
+  const cmpTable=(()=>{
+    const td=v=>`<td class="num">${v}</td>`, sep='<td class="gap"></td>';
+    const head=C?`<tr><th rowspan="2">Показатель</th><th class="num grp" colspan="3">В рабочий день</th><th class="gap" rowspan="2"></th><th class="num grp" colspan="3">На 1 депозит</th><th class="gap" rowspan="2"></th><th class="num grp" colspan="2">Всего за период</th><th class="gap" rowspan="2"></th><th class="num" rowspan="2">Сегодня<br><span class="muted small">к ${asOf}</span></th></tr>
+      <tr><th class="num">${pTxt(a,b)}</th><th class="num">${pTxt(c[0],c[1])}</th><th class="num">±</th><th class="num">сейчас</th><th class="num">было</th><th class="num">±</th><th class="num">сейчас</th><th class="num">было</th></tr>`
+      :`<tr><th>Показатель</th><th class="num">В рабочий день</th><th class="num">На 1 депозит</th><th class="num">Всего за период</th><th class="num">Сегодня <span class="muted small">к ${asOf}</span></th></tr>`;
+    const depRow=C?`<tr class="dep-row"><td>Депозиты в работе <span class="muted small">(в среднем)</span></td>${td(f1(S.depAvg))}${td(f1(C.depAvg))}${td(dlt(S.depAvg,C.depAvg)||'—')}${sep}${td('')}${td('')}${td('')}${sep}${td('')}${td('')}${sep}${td(TDs.depEnd??'—')}</tr>`
+      :`<tr class="dep-row"><td>Депозиты в работе <span class="muted small">(в среднем)</span></td>${td(f1(S.depAvg))}${td('')}${td('')}${td(TDs.depEnd??'—')}</tr>`;
+    const rowsH=DSH.map((nm,i)=>{ const pd=perDep(S.avg[i],S.depAvg), po=C?perDep(C.avg[i],C.depAvg):null;
+      return C?`<tr><td>${nm}</td>${td('<b>'+f1(S.avg[i])+'</b>')}${td(f1(C.avg[i]))}${td(dlt(S.avg[i],C.avg[i])||'—')}${sep}${td(f2(pd))}${td(f2(po))}${td(dlt(pd,po)||'—')}${sep}${td(S.tot[i].toLocaleString('ru-RU'))}${td(C.tot[i].toLocaleString('ru-RU'))}${sep}${td(TD[i])}</tr>`
+        :`<tr><td>${nm}</td>${td('<b>'+f1(S.avg[i])+'</b>')}${td(f2(pd))}${td(S.tot[i].toLocaleString('ru-RU'))}${td(TD[i])}</tr>`; }).join('');
+    return `<div class="rtbl-wrap cmp-wrap"><table class="rtbl cmp"><thead>${head}</thead><tbody>${depRow}${rowsH}</tbody></table></div>`;
+  })();
   const lab=k=>st.anBy==='m'?esc(U[k].n):esc(k);
   const aggRows=[...S.agg.entries()].sort((x,y)=>y[1].v[0]-x[1].v[0]).map(([k,g])=>{ const o=C&&C.agg.get(k), na=g.act.size, oa=o?o.act.size:0;
     return `<tr><td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc(U[k].office)}</td>`:''}<td class="num" ${C?`title="было ${oa}"`:''}>${na}</td><td class="num" ${C?`title="было в среднем ${o&&o.dpAvg!=null?f1(o.dpAvg):'—'}"`:''}>${g.dpAvg!=null?f1(g.dpAvg):'—'}${C?' '+(dlt(g.dpAvg,o?o.dpAvg:null)||''):''}</td>${g.v.map((x,i)=>{ const cur=na?g.w[i]/na:null, old=oa?o.w[i]/oa:null;
@@ -670,13 +694,13 @@ function drawDaily(rows){
       ${st.cmp==='custom'?`<label class="dl-in">с ${dateIn('cFrom',c[0])} по ${dateIn('cTo',c[1])}</label>`:''}</div>
     <div class="small muted" style="margin:2px 0 8px">Сейчас: <b style="color:var(--ink)">${pTxt(a,b)}</b> (${S.per.length} дн., рабочих ${S.work})${C?` · сравнение: <b style="color:var(--ink)">${pTxt(c[0],c[1])}</b> (${C.per.length} дн., рабочих ${C.work})`:''}</div>
     ${warn.length?`<div class="small" style="color:#b54708;margin:0 0 8px">⚠ ${warn.join('; ')}.</div>`:''}
-    <div class="an-tiles an7"><div class="an-tile dep-tile" title="Сколько сделок было в депозитных стадиях — в среднем по дням периода (на конец каждого дня)" style="cursor:pointer;${M===6?'border-color:var(--ink)':''}" data-dm="6"><div class="v">${f1(S.depAvg)} ${C?dlt(S.depAvg,C.depAvg):''}</div><div class="l">Депозитов в работе (в среднем)</div><div class="s today-s">сейчас: <b>${TDs.depEnd??'—'}</b></div><div class="s">на конец периода ${S.depEnd??'—'}${C?` · было в среднем ${f1(C.depAvg)}, на конец ${C.depEnd??'—'}`:''}</div></div>${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${M===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(S.avg[i])} ${C?dlt(S.avg[i],C.avg[i]):''}</div><div class="l">${m.n} в рабочий день</div><div class="s today-s">сегодня к ${asOf}: <b>${TD[i]}</b></div><div class="s">всего ${S.tot[i]}${C?` · было ${f1(C.avg[i])}/д, всего ${C.tot[i]}`:''}</div><div class="s" title="в рабочий день на один депозит в работе">на 1 депозит: ${f2(perDep(S.avg[i],S.depAvg))}${C?` · было ${f2(perDep(C.avg[i],C.depAvg))} ${dlt(perDep(S.avg[i],S.depAvg),perDep(C.avg[i],C.depAvg))}`:''}</div></div>`).join('')}</div>
-    <div class="lg"><span><i style="background:#3b6fd4"></i>${MN} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — сменить показатель</span></div>
+    <div class="an-tiles">${[{l:'Депозиты в работе',v:S.depAvg,o:C&&C.depAvg,s:'в среднем по дням',i:6,h:'Сколько сделок было в депозитных стадиях — в среднем по дням периода'},...DM.map((m,i)=>({l:DSH[i],v:S.avg[i],o:C&&C.avg[i],s:'в рабочий день',i,h:m.h||''}))].map(x=>`<div class="an-tile t2${x.i===6?' dep-tile':''}${M===x.i?' sel':''}" title="${x.h}" data-dm="${x.i}"><div class="l">${x.l}</div><div class="v">${f1(x.v)}${C?' '+dlt(x.v,x.o):''}</div><div class="s">${x.s}</div></div>`).join('')}</div>
+    ${cmpTable}
+    <div class="lg"><span><i style="background:#3b6fd4"></i>${MN} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — показать на графике</span></div>
     ${svg}</div>
   <div class="card"><div class="vb-h"><h3>По дням</h3><span class="muted small">${pTxt(a,b)}</span></div>
     <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th><th class="num" title="Депозитов в работе на конец дня">Депозитов</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>
     ${sumRow('Всего за период',['—',...S.tot],'sum')}${sumRow('В среднем за рабочий день',[S.depAvg,...S.avg],'sum')}
-    ${C?sumRow(`Было в среднем (${pTxt(c[0],c[1])})`,[C.depAvg,...C.avg],'sum')+sumRow('Изменение',[dlt(S.depAvg,C.depAvg)||'—',...S.avg.map((x,i)=>dlt(x,C.avg[i])||'—')],'sum'):''}
     ${S.per.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dFmt(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}${p.d<EXACT_FROM&&!p.nd?' · ≈':''}</span></td><td class="num">${p.dp??'—'}</td>${p.v.map(x=>`<td class="num">${p.nd?'—':x}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div></div>
   <div class="card"><div class="vb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'} · ${pTxt(a,b)}</h3><span class="muted small">всего и в среднем за рабочий день${C?', изменение — к среднему за '+pTxt(c[0],c[1])+' (наведите на число — покажет, сколько было)':''}</span><span style="flex:1"></span>
