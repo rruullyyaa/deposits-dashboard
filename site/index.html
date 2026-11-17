@@ -190,6 +190,8 @@ tr.wknd td{color:var(--ink3)}
 .an-tile .v .dl{font-size:12px;vertical-align:middle}
 .dl.up{color:#067647}.dl.down{color:#b42318}
 tr.sum td{background:#fafaf7}
+.an-tile .s.today-s{color:var(--ink2);margin-top:4px}
+.an-tile .s.today-s b{color:var(--ink);font-size:13px}
 /* v6: аналитика */
 .an-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 12px}
 .an-tile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fcfcfa}
@@ -623,7 +625,8 @@ function drawDaily(rows){
     days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],w:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); x.forEach((y,i)=>g.v[i]+=y); if(d!==today&&x.some(y=>y>0)){ g.act.add(d); x.forEach((y,i)=>g.w[i]+=y); } }));
     return {per,tot,avg,work:work.length,agg,nodata:per.filter(p=>p.nd).length,approx:days.some(d=>d<EXACT_FROM&&daily[d])};
   }
-  const S=stats(dRange(a,b)), C=c?stats(dRange(c[0],c[1])):null;
+  const S=stats(dRange(a,b)), C=c?stats(dRange(c[0],c[1])):null, TD=stats([today]).tot;
+  const asOf=new Date(NOW).toLocaleTimeString('ru-RU',{timeZone:'Europe/Kiev',hour:'2-digit',minute:'2-digit'});
   const dlt=(cur,old)=>{ if(cur==null||old==null) return ''; if(old===0) return cur>0?'<span class="dl up">новое</span>':''; const p=(cur-old)/old*100; if(Math.abs(p)<0.5) return '<span class="dl">±0%</span>'; return `<span class="dl ${p>0?'up':'down'}">${p>0?'▲':'▼'} ${Math.abs(Math.round(p))}%</span>`; };
   const wd=d=>new Date(d+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
   const isWk=d=>{ const g=new Date(d+'T12:00:00Z').getUTCDay(); return g===0||g===6; };
@@ -656,7 +659,7 @@ function drawDaily(rows){
       ${st.cmp==='custom'?`<label class="dl-in">с ${dateIn('cFrom',c[0])} по ${dateIn('cTo',c[1])}</label>`:''}</div>
     <div class="small muted" style="margin:2px 0 8px">Сейчас: <b style="color:var(--ink)">${pTxt(a,b)}</b> (${S.per.length} дн., рабочих ${S.work})${C?` · сравнение: <b style="color:var(--ink)">${pTxt(c[0],c[1])}</b> (${C.per.length} дн., рабочих ${C.work})`:''}</div>
     ${warn.length?`<div class="small" style="color:#b54708;margin:0 0 8px">⚠ ${warn.join('; ')}.</div>`:''}
-    <div class="an-tiles">${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${M===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(S.avg[i])} ${C?dlt(S.avg[i],C.avg[i]):''}</div><div class="l">${m.n} в рабочий день</div><div class="s">всего ${S.tot[i]}${C?` · было ${f1(C.avg[i])}/д, всего ${C.tot[i]}`:''}</div></div>`).join('')}</div>
+    <div class="an-tiles">${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${M===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(S.avg[i])} ${C?dlt(S.avg[i],C.avg[i]):''}</div><div class="l">${m.n} в рабочий день</div><div class="s today-s">сегодня к ${asOf}: <b>${TD[i]}</b></div><div class="s">всего ${S.tot[i]}${C?` · было ${f1(C.avg[i])}/д, всего ${C.tot[i]}`:''}</div></div>`).join('')}</div>
     <div class="lg"><span><i style="background:#3b6fd4"></i>${DM[M].n} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — сменить показатель</span></div>
     ${svg}</div>
   <div class="card"><div class="vb-h"><h3>По дням</h3><span class="muted small">${pTxt(a,b)}</span></div>
