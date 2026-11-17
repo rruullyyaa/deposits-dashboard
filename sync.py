@@ -641,6 +641,12 @@ def merge_daily(prev, cur, now_ms):
     for day, v in cur.items():
         if day >= fresh_from or day not in out:
             out[day] = v
+        else:
+            # прошлый день: по каждому менеджеру и показателю берём большее из сохранённого и пересчитанного —
+            # так не теряются ушедшие из депозитов клиенты и подхватываются новые источники (ответы в задачах)
+            old = out[day]
+            out[day] = {u: [max(a, b) for a, b in zip(old.get(u, [0] * 6), v.get(u, [0] * 6))]
+                        for u in set(old) | set(v)}
     return {d: out[d] for d in sorted(out) if d >= keep_from}
 
 
