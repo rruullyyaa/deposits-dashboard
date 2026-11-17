@@ -36,7 +36,8 @@ STAGES = [  # рабочие стадии депозитов, по порядк�
 ]
 WIN_STAGE = "7"      # «Выиграли — ждём оплату»: попадание сюда считаем выигрышем
 WIN_DAYS = 30        # за сколько дней брать выигранные сделки для аналитики
-DAILY_DAYS = 45      # сколько дней хранить статистику «по дням»
+DAILY_DAYS = 90      # за сколько дней пересчитывать статистику «по дням» (восстановление задним числом)
+DAILY_KEEP_DAYS = 400  # сколько дней хранить статистику «по дням»
 TEAM_ROOT_DEPARTMENTS = {"75", "40", "89"}  # «Отдел продаж», «Отдел покупок», «B2B» — все их менеджеры в списках
 TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
@@ -569,7 +570,7 @@ def merge_daily(prev, cur, now_ms):
     from zoneinfo import ZoneInfo
     kyiv = ZoneInfo("Europe/Kyiv")
     today = dt.datetime.fromtimestamp(now_ms / 1000, kyiv).date()
-    keep_from = (today - dt.timedelta(days=DAILY_DAYS)).isoformat()
+    keep_from = (today - dt.timedelta(days=DAILY_KEEP_DAYS)).isoformat()
     fresh_from = (today - dt.timedelta(days=1)).isoformat()
     out = {}
     for day, v in (prev or {}).items():
