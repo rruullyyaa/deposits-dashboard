@@ -200,6 +200,63 @@ def vins(text):
 
 
 # ---------------------------------------------------------------- сбор данных
+def task_chat_comments(bx, deal_ids):
+    """Ответы в задачах, привязанных к сделкам (чат задачи), — в том же виде, что комментарии ленты.
+    Нужно право вебхука «im» (Чаты и уведомления); без него просто пропускаем."""
+    log = lambda *a: print(*a, flush=True)
+    task_deals = {}
+    for part in chunks(deal_ids, 50):
+        for a in bx.all("crm.activity.list", {
+                "filter": {"OWNER_TYPE_ID": 2, "OWNER_ID": part, "PROVIDER_ID": "CRM_TASKS_TASK"},
+                "select": ["ID", "OWNER_ID", "ASSOCIATED_ENTITY_ID"]}):
+            if a.get("ASSOCIATED_ENTITY_ID"):
+                task_deals.setdefault(str(a["ASSOCIATED_ENTITY_ID"]), set()).add(str(a["OWNER_ID"]))
+    chat_deals = {}
+    for part in chunks(sorted(task_deals), 50):
+        for tk in bx.all("tasks.task.list", {"filter": {"ID": part}, "select": ["ID", "CHAT_ID"]}):
+            ch = tk.get("chatId") or tk.get("CHAT_ID")
+            if ch and str(ch) != "0":
+                chat_deals.setdefault(str(ch), set()).update(task_deals.get(str(tk.get("id") or tk.get("ID")), ()))
+    out, n_msg, info = {}, 0, {"tasks": len(task_deals), "chats": len(chat_deals)}
+
+    def add(ch, msgs):
+        nonlocal n_msg
+        for m in msgs:
+            if not m.get("author_id"):  # системные сообщения («создал задачу» и т.п.)
+                continue
+            files = (m.get("params") or {}).get("FILE_ID") if isinstance(m.get("params"), dict) else None
+            text = m.get("text") or ("[файл]" if files else "")
+            if not text:
+                continue
+            n_msg += 1
+            item = {"ID": f"t{m.get('id')}", "CREATED": m.get("date"), "AUTHOR_ID": str(m["author_id"]),
+                    "COMMENT": text, "SRC": "task"}
+            for did in chat_deals[ch]:
+                out.setdefault(did, []).append(item)
+
+    chats = sorted(chat_deals)
+    try:
+        for part in chunks(chats, 50):
+            res, _, err = bx.batch({f"c{ch}": ("im.dialog.messages.get", {"DIALOG_ID": f"chat{ch}", "LIMIT": 50}) for ch in part})
+            if err and not res:
+                raise RuntimeError(str(list(err.values())[0])[:200])
+            for key, r in res.items():
+                ch, msgs = key[1:], (r or {}).get("messages") or []
+                add(ch, msgs)
+                while len(msgs) == 50:  # длинный чат — догружаем более ранние сообщения
+                    r2 = bx.call("im.dialog.messages.get", {"DIALOG_ID": f"chat{ch}", "LIMIT": 50,
+                                                            "LAST_ID": min(m["id"] for m in msgs)})
+                    msgs = (r2.get("result") or {}).get("messages") or []
+                    add(ch, msgs)
+    except RuntimeError as e:
+        log(f"Ответы в задачах недоступны (добавьте вебхуку право «Чаты и уведомления» / im): {e}")
+        info["error"] = "no_access"
+        return {}, info
+    info["messages"] = n_msg
+    log(f"Ответов в задачах сделок: {n_msg} (задач {len(task_deals)}, чатов {len(chat_deals)})")
+    return out, info
+
+
 def collect(bx, now_ms):
     log = lambda *a: print(*a, flush=True)
     dep_stages = [s for s, _ in STAGES]
@@ -292,6 +349,11 @@ def collect(bx, now_ms):
         if err:
             log("Ошибки комментариев:", list(err)[:5])
     log(f"Комментариев: {sum(len(v) for v in comments.values())}")
+    # ответы в задачах сделки тоже считаем комментариями
+    tc, task_chat_info = task_chat_comments(bx, ids)
+    for i, items in tc.items():
+        if i in comments:
+            comments[i].extend(items)
 
     # ключи для сопоставления задач со сделками: VIN / лот из комментариев, телефон клиента
     by_vin, by_lot, by_phone = {}, {}, {}
@@ -511,7 +573,7 @@ def collect(bx, now_ms):
         "wins": win_rows,
         "daily": daily,
         "winDays": WIN_DAYS,
-        "meta": {"torg": torg_stat, "calc": calc_stat, "api_calls": bx.calls},
+        "meta": {"torg": torg_stat, "calc": calc_stat, "taskChat": task_chat_info, "api_calls": bx.calls},
     }
 
 
