@@ -182,6 +182,14 @@ body.compact .ttl{display:none}
 .bars text{font:11px system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink3)}
 tr.today td{background:#fbf8ee}
 tr.wknd td{color:var(--ink3)}
+.dctl{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:2px 0 8px}
+.seg2.sw{flex-wrap:wrap}
+.dl-in{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);flex-wrap:wrap}
+.din{font:inherit;font-size:12px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:3px 6px;color:var(--ink);width:auto}
+.dl{font-size:11px;font-weight:600;color:var(--ink3);white-space:nowrap}
+.an-tile .v .dl{font-size:12px;vertical-align:middle}
+.dl.up{color:#067647}.dl.down{color:#b42318}
+tr.sum td{background:#fafaf7}
 /* v6: аналитика */
 .an-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:4px 0 12px}
 .an-tile{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fcfcfa}
@@ -564,56 +572,113 @@ function drawRating(rows){
 }
 
 // ---- аналитика: средние на клиента
-st.anBy='m'; st.anMode='avg'; st.dayP=14; st.dayM=0;
+st.anBy='m'; st.anMode='avg'; st.dayM=0; st.dPre='14'; st.dFrom=null; st.dTo=null; st.cmp='prev'; st.cFrom=null; st.cTo=null;
 const DM=[{n:'Звонков'},{n:'Разговоров',h:'звонков от 30 с'},{n:'Комментариев'},{n:'Подборов'},{n:'Торгов',h:'все задачи в «1.2 Торги»'},{n:'Просчётов',h:'все задачи в «1.1 Расчет ремонта»'}];
 const anSwitch=()=>`<div class="tabs" style="margin:0 0 12px"><span class="seg2"><button data-am="avg" class="${st.anMode==='avg'?'on':''}">Средние на клиента</button><button data-am="day" class="${st.anMode==='day'?'on':''}">По дням</button></span></div>`;
 function bindAnSwitch(rows){ vbox.querySelectorAll('[data-am]').forEach(b=>b.onclick=()=>{st.anMode=b.dataset.am; drawAnal(rows);}); }
 function dayKey(ts){ return new Date(ts).toLocaleDateString('sv-SE',{timeZone:'Europe/Kiev'}); }
+// даты 'YYYY-MM-DD' без часовых поясов
+const dAdd=(d,n)=>{ const x=new Date(d+'T00:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10); };
+const dDiff=(a,b)=>Math.round((new Date(b+'T00:00:00Z')-new Date(a+'T00:00:00Z'))/86400000);
+const dRange=(a,b)=>{ const o=[]; for(let d=a; d<=b && o.length<800; d=dAdd(d,1)) o.push(d); return o; };
+const dMon=d=>{ const g=new Date(d+'T00:00:00Z').getUTCDay(); return dAdd(d,-((g+6)%7)); };
+const dAddMonth=(d,n)=>{ const [y,m,dd]=d.split('-').map(Number); const t=new Date(Date.UTC(y,m-1+n,1)); const last=new Date(Date.UTC(t.getUTCFullYear(),t.getUTCMonth()+1,0)).getUTCDate(); t.setUTCDate(Math.min(dd,last)); return t.toISOString().slice(0,10); };
+const dFmt=d=>d.slice(8,10)+'.'+d.slice(5,7)+(d.slice(0,4)!==dayKey(NOW).slice(0,4)?'.'+d.slice(2,4):'');
+const EXACT_FROM='2026-11-16';  // с этого дня статистика по дням фиксируется каждый день; раньше — восстановлена задним числом
+const DPRE=[['7','7 дней'],['14','14 дней'],['30','30 дней'],['tw','Эта неделя'],['lw','Прошлая неделя'],['tm','Этот месяц'],['lm','Прошлый месяц']];
+const DCMP=[['none','Не сравнивать'],['prev','С предыдущим периодом'],['week','С тем же периодом неделю назад'],['month','С тем же периодом месяц назад'],['custom','Со своим периодом…']];
+function dayPeriod(){
+  const today=dayKey(NOW); let a,b;
+  switch(st.dPre){
+    case 'tw': a=dMon(today); b=today; break;
+    case 'lw': a=dAdd(dMon(today),-7); b=dAdd(a,6); break;
+    case 'tm': a=today.slice(0,8)+'01'; b=today; break;
+    case 'lm': a=dAddMonth(today.slice(0,8)+'01',-1); b=dAdd(today.slice(0,8)+'01',-1); break;
+    case 'custom': a=st.dFrom||dAdd(today,-13); b=st.dTo||today; break;
+    default: b=today; a=dAdd(today,-(+st.dPre||14)+1);
+  }
+  if(a>b) [a,b]=[b,a]; if(b>today) b=today;
+  let c=null; const len=dDiff(a,b)+1;
+  if(st.cmp==='prev'&&st.dPre==='lm') c=[dAddMonth(a,-1),dAdd(a,-1)];
+  else if(st.cmp==='prev'&&st.dPre==='tm') c=[dAddMonth(a,-1),dAddMonth(b,-1)];
+  else if(st.cmp==='prev') c=[dAdd(a,-len),dAdd(a,-1)];
+  else if(st.cmp==='week') c=[dAdd(a,-7),dAdd(b,-7)];
+  else if(st.cmp==='month') c=[dAddMonth(a,-1),dAddMonth(b,-1)];
+  else if(st.cmp==='custom'){ let x=st.cFrom||dAdd(a,-len), y=st.cTo||dAdd(x,len-1); if(x>y) [x,y]=[y,x]; c=[x,y]; }
+  if(c&&c[1]>today) c[1]=today;
+  return {a,b,c};
+}
 function drawDaily(rows){
-  const daily=D.daily||{}, P=st.dayP, DAYMS=86400000;
-  const days=[]; for(let i=P-1;i>=0;i--) days.push(dayKey(NOW-i*DAYMS));
-  const today=dayKey(NOW);
+  const daily=D.daily||{}, today=dayKey(NOW);
+  const have=Object.keys(daily).sort(), first=have[0]||today;
+  const {a,b,c}=dayPeriod();
   const okU=m=>{ const u=U[m]; return u&&u.team&&(!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||m===st.mgr); };
-  const perDay=days.map(d=>{ const v=[0,0,0,0,0,0]; Object.entries(daily[d]||{}).forEach(([m,a])=>{ if(okU(m)) a.forEach((x,i)=>v[i]+=x); }); return {d,v}; });
-  const full=perDay.filter(p=>p.d!==today), work=full.filter(p=>p.v.some(x=>x>0));
-  const avg=i=>work.length?work.reduce((s,p)=>s+p.v[i],0)/work.length:null;
-  const tdy=perDay.find(p=>p.d===today)||{v:[0,0,0,0,0,0]};
+  // сводка за набор дней: по дням, итог, среднее за рабочий день, по менеджерам/офисам
+  function stats(days){
+    const per=days.map(d=>{ const v=[0,0,0,0,0,0]; Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(okU(m)) x.forEach((y,i)=>v[i]+=y); }); return {d,v,nd:!daily[d]&&d<first}; });
+    const tot=[0,0,0,0,0,0]; per.forEach(p=>p.v.forEach((x,i)=>tot[i]+=x));
+    const work=per.filter(p=>p.d!==today&&p.v.some(x=>x>0));
+    const avg=tot.map((_,i)=>work.length?work.reduce((s,p)=>s+p.v[i],0)/work.length:null);
+    const agg=new Map();
+    days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],w:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); x.forEach((y,i)=>g.v[i]+=y); if(d!==today&&x.some(y=>y>0)){ g.act.add(d); x.forEach((y,i)=>g.w[i]+=y); } }));
+    return {per,tot,avg,work:work.length,agg,nodata:per.filter(p=>p.nd).length,approx:days.some(d=>d<EXACT_FROM&&daily[d])};
+  }
+  const S=stats(dRange(a,b)), C=c?stats(dRange(c[0],c[1])):null;
+  const dlt=(cur,old)=>{ if(cur==null||old==null) return ''; if(old===0) return cur>0?'<span class="dl up">новое</span>':''; const p=(cur-old)/old*100; if(Math.abs(p)<0.5) return '<span class="dl">±0%</span>'; return `<span class="dl ${p>0?'up':'down'}">${p>0?'▲':'▼'} ${Math.abs(Math.round(p))}%</span>`; };
   const wd=d=>new Date(d+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short'});
-  const dm=d=>d.slice(8,10)+'.'+d.slice(5,7);
-  const isWk=d=>{ const g=new Date(d+'T12:00:00').getDay(); return g===0||g===6; };
-  // столбики по выбранному показателю
-  const W=820,H=220,L=40,Rr=10,T=12,B=30, n=perDay.length, bw=(W-L-Rr)/n;
-  let mx=Math.max(1,...perDay.map(p=>p.v[st.dayM])); const stp=[1,2,5,10,20,25,50,100,200,250,500,1000].find(s=>s*4>=mx)||Math.ceil(mx/4); mx=stp*4;
-  const y=v=>T+(H-T-B)*(1-v/mx);
-  let svg=`<svg class="bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${DM[st.dayM].n} по дням">`;
+  const isWk=d=>{ const g=new Date(d+'T12:00:00Z').getUTCDay(); return g===0||g===6; };
+  const pTxt=(x,y)=>x===y?dFmt(x):`${dFmt(x)} – ${dFmt(y)}`;
+  // столбики: текущий период, рядом — сравниваемый (по порядку дней)
+  const n=S.per.length, M=st.dayM, W=820,H=220,L=40,Rr=10,T=12,B=30, bw=(W-L-Rr)/n;
+  let mx=Math.max(1,...S.per.map(p=>p.v[M]),...(C?C.per.map(p=>p.v[M]):[])); const stp=[1,2,5,10,20,25,50,100,200,250,500,1000,2000,5000].find(s=>s*4>=mx)||Math.ceil(mx/4); mx=stp*4;
+  const y=v=>T+(H-T-B)*(1-v/mx), lbEvery=Math.ceil(n/16);
+  let svg=`<svg class="bars" viewBox="0 0 ${W} ${H}" role="img" aria-label="${DM[M].n} по дням">`;
   [0,1,2,3,4].forEach(i=>{const v=i*stp; svg+=`<line x1="${L}" x2="${W-Rr}" y1="${y(v)}" y2="${y(v)}" stroke="#ecebe6"/><text x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`;});
-  perDay.forEach((p,i)=>{ const x=L+i*bw+bw*0.15, w=bw*0.7, v=p.v[st.dayM]; const col=p.d===today?'#c9d8f6':isWk(p.d)?'#b9c7e6':'#3b6fd4';
-    svg+=`<rect x="${x}" y="${y(v)}" width="${w}" height="${Math.max(0,H-B-y(v))}" rx="3" fill="${col}"><title>${dm(p.d)} (${wd(p.d)}): ${v}${p.d===today?' — день ещё идёт':''}</title></rect>`;
-    if(n<=16||i%2===0) svg+=`<text x="${x+w/2}" y="${H-12}" text-anchor="middle">${dm(p.d)}</text>`; });
+  S.per.forEach((p,i)=>{ const v=p.v[M], cp=C&&C.per[i];
+    const x0=L+i*bw+bw*0.12, wAll=bw*0.76, w=cp?wAll/2:wAll;
+    if(cp){ const cv=cp.v[M]; svg+=`<rect x="${x0}" y="${y(cv)}" width="${w}" height="${Math.max(0,H-B-y(cv))}" rx="2" fill="#d6d3cb"><title>${dFmt(cp.d)} (${wd(cp.d)}): ${cp.nd?'нет данных':cv}</title></rect>`; }
+    const col=p.d===today?'#c9d8f6':isWk(p.d)?'#b9c7e6':'#3b6fd4', xs=cp?x0+w:x0;
+    svg+=`<rect x="${xs}" y="${y(v)}" width="${w}" height="${Math.max(0,H-B-y(v))}" rx="2" fill="${col}"><title>${dFmt(p.d)} (${wd(p.d)}): ${p.nd?'нет данных':v}${p.d===today?' — день ещё идёт':''}${cp?` · сравнение ${dFmt(cp.d)}: ${cp.nd?'нет данных':cp.v[M]}`:''}</title></rect>`;
+    if(i%lbEvery===0) svg+=`<text x="${x0+wAll/2}" y="${H-12}" text-anchor="middle">${dFmt(p.d).slice(0,5)}</text>`; });
   svg+='</svg>';
-  // по менеджерам / офисам за период
-  const agg=new Map();
-  days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,a])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); a.forEach((x,i)=>g.v[i]+=x); if(d!==today&&a.some(x=>x>0)) g.act.add(d); }));
   const lab=k=>st.anBy==='m'?esc(U[k].n):esc(k);
-  const aggRows=[...agg.entries()].sort((a,b)=>b[1].v[0]-a[1].v[0]).map(([k,g])=>`<tr><td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc(U[k].office)}</td>`:''}<td class="num">${g.act.size}</td>${g.v.map((x,i)=>`<td class="num">${x}<span class="cnt">${g.act.size?f1(x/g.act.size)+'/д':''}</span></td>`).join('')}</tr>`).join('');
+  const aggRows=[...S.agg.entries()].sort((x,y)=>y[1].v[0]-x[1].v[0]).map(([k,g])=>{ const o=C&&C.agg.get(k), na=g.act.size, oa=o?o.act.size:0;
+    return `<tr><td><span class="mgr-link" data-k="${esc(k)}">${lab(k)}</span></td>${st.anBy==='m'?`<td class="small hide-m">${esc(U[k].office)}</td>`:''}<td class="num" ${C?`title="было ${oa}"`:''}>${na}</td>${g.v.map((x,i)=>{ const cur=na?g.w[i]/na:null, old=oa?o.w[i]/oa:null;
+      return `<td class="num" ${C?`title="было ${old!=null?f1(old)+' в день, всего '+o.v[i]:'—'}"`:''}>${x}<span class="cnt">${cur!=null?f1(cur)+'/д':''}</span>${C?' '+(dlt(cur,old)||'<span class="dl">—</span>'):''}</td>`; }).join('')}</tr>`; }).join('');
+  const dateIn=(id,v)=>`<input type="date" class="din" id="${id}" value="${v}" min="${first}" max="${today}">`;
+  const sumRow=(t,v,cls='')=>`<tr class="${cls}"><td><b>${t}</b></td>${v.map(x=>`<td class="num"><b>${x==null?'—':typeof x==='number'?f1(x):x}</b></td>`).join('')}</tr>`;
+  const warn=[]; if(S.nodata) warn.push(`за ${S.nodata} дн. выбранного периода данных нет — статистика есть с ${dFmt(first)}`); if(C&&C.nodata) warn.push(`для периода сравнения нет данных за ${C.nodata} дн. из ${C.per.length}`);
   vbox.innerHTML=anSwitch()+`
-  <div class="card"><div class="vb-h"><h3>Сколько всего за день</h3><span class="muted small">по выбранным отделу / офису / менеджеру</span><span style="flex:1"></span>
-    <span class="seg2">${[7,14,30].map(v=>`<button data-dp="${v}" class="${st.dayP===v?'on':''}">${v} дней</button>`).join('')}</span></div>
-    <div class="an-tiles">${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${st.dayM===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(avg(i))}</div><div class="l">${m.n} в день</div><div class="s">сегодня пока: ${tdy.v[i]}</div></div>`).join('')}</div>
-    <div class="lg"><span><i style="background:#3b6fd4"></i>${DM[st.dayM].n} — будни</span><span><i style="background:#b9c7e6"></i>выходные</span><span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span><span class="muted">клик по плитке — сменить показатель</span></div>
+  <div class="card"><div class="vb-h" style="flex-wrap:wrap;gap:8px"><h3>Сколько всего за день</h3><span class="muted small">по выбранным отделу / офису / менеджеру</span></div>
+    <div class="dctl"><div class="seg2 sw">${DPRE.map(([k,t])=>`<button data-dp="${k}" class="${st.dPre===k?'on':''}">${t}</button>`).join('')}</div>
+      <label class="dl-in">Период: с ${dateIn('dFrom',a)} по ${dateIn('dTo',b)}</label>
+      <label class="dl-in">Сравнить: <select id="dCmp" class="din">${DCMP.map(([k,t])=>`<option value="${k}" ${st.cmp===k?'selected':''}>${t}</option>`).join('')}</select></label>
+      ${st.cmp==='custom'?`<label class="dl-in">с ${dateIn('cFrom',c[0])} по ${dateIn('cTo',c[1])}</label>`:''}</div>
+    <div class="small muted" style="margin:2px 0 8px">Сейчас: <b style="color:var(--ink)">${pTxt(a,b)}</b> (${S.per.length} дн., рабочих ${S.work})${C?` · сравнение: <b style="color:var(--ink)">${pTxt(c[0],c[1])}</b> (${C.per.length} дн., рабочих ${C.work})`:''}</div>
+    ${warn.length?`<div class="small" style="color:#b54708;margin:0 0 8px">⚠ ${warn.join('; ')}.</div>`:''}
+    <div class="an-tiles">${DM.map((m,i)=>`<div class="an-tile" title="${m.h||''}" style="cursor:pointer;${M===i?'border-color:var(--ink)':''}" data-dm="${i}"><div class="v">${f1(S.avg[i])} ${C?dlt(S.avg[i],C.avg[i]):''}</div><div class="l">${m.n} в рабочий день</div><div class="s">всего ${S.tot[i]}${C?` · было ${f1(C.avg[i])}/д, всего ${C.tot[i]}`:''}</div></div>`).join('')}</div>
+    <div class="lg"><span><i style="background:#3b6fd4"></i>${DM[M].n} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — сменить показатель</span></div>
     ${svg}</div>
-  <div class="card"><div class="vb-h"><h3>По дням</h3></div>
+  <div class="card"><div class="vb-h"><h3>По дням</h3><span class="muted small">${pTxt(a,b)}</span></div>
     <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>День</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>
-    ${perDay.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dm(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}</span></td>${p.v.map(x=>`<td class="num">${x}</td>`).join('')}</tr>`).join('')}
+    ${sumRow('Всего за период',S.tot,'sum')}${sumRow('В среднем за рабочий день',S.avg,'sum')}
+    ${C?sumRow(`Было в среднем (${pTxt(c[0],c[1])})`,C.avg,'sum')+sumRow('Изменение',S.avg.map((x,i)=>dlt(x,C.avg[i])||'—'),'sum'):''}
+    ${S.per.slice().reverse().map(p=>`<tr class="${p.d===today?'today':isWk(p.d)?'wknd':''}"><td>${dFmt(p.d)} <span class="muted small">${wd(p.d)}${p.d===today?' · сегодня':''}${p.d<EXACT_FROM&&!p.nd?' · ≈':''}</span></td>${p.v.map(x=>`<td class="num">${p.nd?'—':x}</td>`).join('')}</tr>`).join('')}
     </tbody></table></div></div>
-  <div class="card"><div class="vb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'} за ${P} дней</h3><span class="muted small">всего и в среднем за рабочий день</span><span style="flex:1"></span>
+  <div class="card"><div class="vb-h"><h3>${st.anBy==='m'?'По менеджерам':'По офисам'} · ${pTxt(a,b)}</h3><span class="muted small">всего и в среднем за рабочий день${C?', изменение — к среднему за '+pTxt(c[0],c[1])+' (наведите на число — покажет, сколько было)':''}</span><span style="flex:1"></span>
     <span class="seg2"><button data-by="m" class="${st.anBy==='m'?'on':''}">по менеджерам</button><button data-by="o" class="${st.anBy==='o'?'on':''}">по офисам</button></span></div>
     <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>${st.anBy==='m'?'Менеджер':'Офис'}</th>${st.anBy==='m'?'<th class="hide-m">Офис</th>':''}<th class="num" title="Дней, когда было хоть одно действие">Раб. дней</th>${DM.map(m=>`<th class="num" title="${m.h||''}">${m.n}</th>`).join('')}</tr></thead><tbody>${aggRows||'<tr><td class="empty" colspan="9">Нет данных</td></tr>'}</tbody></table></div></div>
-  <div class="note">Звонки, разговоры (от 30 с), комментарии и подборы — по клиентам-депозитам и выигранным сделкам, засчитываются тому, кто звонил или писал. Торги и просчёты — все задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», засчитываются тому, кто поставил задачу. «В среднем в день» — по дням, когда было хоть одно действие (сегодня не учитывается). Фильтры по стадиям и направлению здесь не применяются. Статистика по дням копится с 16.11.2026 и хранится ${D.daily?Object.keys(D.daily).length:0} дн.</div>`;
+  <div class="note">Звонки, разговоры (от 30 с), комментарии и подборы — по клиентам-депозитам и выигранным сделкам, засчитываются тому, кто звонил или писал. Торги и просчёты — все задачи в проектах «1.2 Торги» и «1.1 Расчет ремонта США/Канада», засчитываются тому, кто поставил задачу. «В рабочий день» — среднее по дням, когда было хоть одно действие (сегодняшний незаконченный день не учитывается); сравнение идёт именно по этим средним, поэтому периоды разной длины сравнивать корректно. Дни до ${dFmt(EXACT_FROM)} (отмечены «≈») восстановлены задним числом: звонки, комментарии и подборы в них — только по нынешним депозитам и выигранным за последние 30 дней, поэтому могут быть занижены; торги и просчёты — полные. Фильтры по стадиям и направлению здесь не применяются. Данные есть с ${dFmt(first)}, хранятся больше года.</div>`;
   bindAnSwitch(rows);
-  vbox.querySelectorAll('[data-dp]').forEach(b=>b.onclick=()=>{st.dayP=+b.dataset.dp; drawDaily(rows);});
-  vbox.querySelectorAll('[data-dm]').forEach(b=>b.onclick=()=>{st.dayM=+b.dataset.dm; drawDaily(rows);});
-  vbox.querySelectorAll('[data-by]').forEach(b=>b.onclick=()=>{st.anBy=b.dataset.by; drawDaily(rows);});
+  const re=()=>drawDaily(rows), val=id=>{ const e=document.getElementById(id); return e&&e.value?e.value:null; };
+  vbox.querySelectorAll('[data-dp]').forEach(x=>x.onclick=()=>{st.dPre=x.dataset.dp; re();});
+  ['dFrom','dTo'].forEach(id=>{ const e=document.getElementById(id); e.onchange=()=>{ st.dPre='custom'; st.dFrom=val('dFrom'); st.dTo=val('dTo'); re(); }; });
+  document.getElementById('dCmp').onchange=e=>{ st.cmp=e.target.value; if(st.cmp==='custom'&&!st.cFrom){ st.cFrom=c?c[0]:null; st.cTo=c?c[1]:null; } re(); };
+  { const e1=document.getElementById('cFrom'), e2=document.getElementById('cTo');
+    if(e1) e1.onchange=()=>{ st.cFrom=val('cFrom'); if(st.cFrom) st.cTo=dAdd(st.cFrom,dDiff(a,b)); re(); };  // начало сдвигает период той же длины
+    if(e2) e2.onchange=()=>{ st.cTo=val('cTo'); re(); }; }
+  vbox.querySelectorAll('[data-dm]').forEach(x=>x.onclick=()=>{st.dayM=+x.dataset.dm; re();});
+  vbox.querySelectorAll('[data-by]').forEach(x=>x.onclick=()=>{st.anBy=x.dataset.by; re();});
   vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; } else st.office=e.dataset.k; fillSelects(); render(); });
 }
 const AK=[{k:'torg',n:'Торгов',usa:1},{k:'calc',n:'Просчётов',usa:1},{k:'sel',n:'Подборов'},{k:'talk',n:'Разговоров',h:'звонков от 30 с'},{k:'call',n:'Звонков',h:'все звонки'},{k:'com',n:'Комментариев'}];
