@@ -190,6 +190,12 @@ tr.wknd td{color:var(--ink3)}
 .an-tile .v .dl{font-size:12px;vertical-align:middle}
 .dl.up{color:#067647}.dl.down{color:#b42318}
 tr.sum td{background:#fafaf7}
+.nc-badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:999px;background:#d92d20;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.chip.on .nc-badge{background:#fff;color:#d92d20}
+.nc-who{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+.nc-pill{border:1px solid var(--line);border-radius:999px;padding:3px 9px;font-size:12px;background:#fcfcfa}
+.nc-t{color:var(--ink2)}
+td.nc-task{white-space:normal;min-width:240px}
 .an-tile.t2{cursor:pointer;padding:10px 12px}
 .an-tile.t2 .l{font-size:12px;color:var(--ink2);font-weight:600;margin-bottom:2px}
 .an-tile.t2 .v{font-size:26px;line-height:1.15}
@@ -274,6 +280,7 @@ table.one td .dl{font-size:12px}
     <button class="chip" data-view="rating">Рейтинг</button>
     <button class="chip" data-view="trend">Динамика</button>
     <button class="chip" data-view="anal">Аналитика</button>
+    <button class="chip nc-chip" data-view="nocrm">Задачи без CRM <span class="nc-badge" id="ncBadge"></span></button>
     <span class="sp"></span>
     <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
     <button class="chip" type="button" id="tblToggle"></button>
@@ -827,15 +834,39 @@ function drawTrend(){
   vbox.querySelectorAll('[data-tm]').forEach(b=>b.onclick=()=>{st.trendMode=b.dataset.tm; drawTrend();});
 }
 
+// ---- задачи без CRM: торги и просчёты, поставленные без сделки в поле CRM
+st.ncG='all';
+const NCG={12:'Торги',10:'Просчёт'};
+function ncList(){ const any=st.grp||st.office||st.mgr;
+  return (D.nocrm||[]).filter(x=>{ const u=U[x.m]; if(!u) return !any; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||x.m===st.mgr); }); }
+function ncBadge(){ const n=(D.nocrm||[]).length, b=document.getElementById('ncBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }
+function drawNoCrm(){
+  const from=D.nocrmFrom?new Date(D.nocrmFrom).toLocaleDateString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit'}):'';
+  if(!D.nocrm){ vbox.innerHTML=`<div class="card"><div class="empty">Данные появятся после ближайшего обновления (в начале часа).</div></div>`; return; }
+  const all=ncList(), L=all.filter(x=>st.ncG==='all'||String(x.g)===st.ncG);
+  const when=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  const who=x=>U[x.m]?U[x.m].n:(x.mn||('ID '+x.m)), off=x=>U[x.m]?U[x.m].office:'';
+  const cnt=new Map(); all.forEach(x=>{ const k=who(x); cnt.set(k,(cnt.get(k)||0)+1); });
+  const nT=all.filter(x=>x.g===12).length, nC=all.filter(x=>x.g===10).length;
+  vbox.innerHTML=`<div class="card"><div class="vb-h tb-h"><h3>Задачи без CRM</h3><span class="muted small">поставлены с ${from} без сделки в поле «CRM»</span><span style="flex:1"></span>
+    <span class="seg2">${[['all',`Все (${all.length})`],['12',`Торги (${nT})`],['10',`Просчёты (${nC})`]].map(([k,l])=>`<button data-ncg="${k}" class="${st.ncG===k?'on':''}">${l}</button>`).join('')}</span></div>
+    ${L.length?`${cnt.size>1?`<div class="nc-who">${[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([n,c])=>`<span class="nc-pill">${esc(n)} <b>${c}</b></span>`).join('')}</div>`:''}
+    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>Когда</th><th>Задача</th><th>Проект</th><th>Кто поставил</th><th class="hide-m">Офис</th><th class="hide-m">Ответственный</th></tr></thead><tbody>
+    ${L.map(x=>`<tr><td class="small" style="white-space:nowrap">${when(x.cr)}</td><td class="nc-task"><a href="${D.portal}/workgroups/group/${x.g}/tasks/task/view/${x.id}/" target="_blank" rel="noopener">№${x.id}</a> <span class="nc-t">${esc(x.t||'')}</span></td><td class="small">${NCG[x.g]||x.g}</td><td>${esc(who(x))}</td><td class="small muted hide-m">${esc(off(x))}</td><td class="small muted hide-m">${esc(x.rn||'')}</td></tr>`).join('')}
+    </tbody></table></div>`
+    :`<div class="empty">С ${from} задач без CRM нет${st.grp||st.office||st.mgr?' по выбранному отделу / офису / менеджеру':''} — все поставлены из сделки.</div>`}</div>
+  <div class="note">Здесь задачи из проектов «1.2 Торги» и «1.1 Расчет ремонта США/Канада», у которых не указана сделка клиента в поле «CRM» — то есть поставленные не из карточки сделки. Показываются задачи, созданные с ${from}; старые не показываются. Как только в задаче укажут сделку, она пропадёт отсюда при ближайшем обновлении (раз в час). Фильтры по отделу, офису и менеджеру применяются; стадии и направление — нет.</div>`;
+  vbox.querySelectorAll('[data-ncg]').forEach(b=>b.onclick=()=>{st.ncG=b.dataset.ncg; drawNoCrm();});
+}
 function render(){
   expandAll.style.display=st.group&&st.view==='deals'?'':'none';
   const rows=scoped();
   drawTiles(rows);
   const shown=rows.filter(passesActive);
-  const special=st.view==='rating'||st.view==='trend'||st.view==='anal';
+  const special=st.view==='rating'||st.view==='trend'||st.view==='anal'||st.view==='nocrm';
   document.getElementById('tblWrap').style.display=special?'none':''; vbox.style.display=special?'':'none';
-  document.getElementById('tools').style.display=(st.view==='trend'||st.view==='anal')?'none':'';
-  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else if(st.view==='anal') drawAnal(rows); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
+  document.getElementById('tools').style.display=(st.view==='trend'||st.view==='anal'||st.view==='nocrm')?'none':'';
+  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else if(st.view==='anal') drawAnal(rows); else if(st.view==='nocrm') drawNoCrm(); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
 }
 
 document.getElementById('note').innerHTML=`
@@ -845,7 +876,7 @@ document.getElementById('note').innerHTML=`
   <b>Направление сделки</b> берётся из поля «Направление» в сделке, если оно есть. Иначе определяется автоматически (отмечено «*»): по названию сделки и комментариям — как менеджер пишет направление («из Кореи», «по Китаю», «з Європи», «только США», китайские марки BYD/Zeekr/Geely…; «Корею не хочет» считается против), плюс по ссылкам на авто (encar — Корея, che168 — Китай, mobile.de / otomoto — Европа, copart / iaai / manheim — США). Свежие комментарии (30 дней) весят вдвое больше. Если признаков нет — США.<br>
   <b>Ограничения.</b> История в Bitrix24 начинается с переноса из amoCRM (около 20.09.2026), поэтому «нет» значит «нет с момента переноса». В ноябре к сделке привязаны лишь 60 из 267 задач в «1.2 Торги» и 44 из 461 в «1.1 Расчет ремонта», остальные сопоставлены по лоту, VIN и телефону — торги и просчёты могут быть недосчитаны. Чтобы считалось точно, такие задачи нужно ставить из карточки сделки.`;
 
-fillSelects(); drawStages(); drawCols(); render();
+fillSelects(); drawStages(); drawCols(); ncBadge(); render();
 })();
 </script>
 </body>
