@@ -200,6 +200,8 @@ tr.dayrow{cursor:pointer}
 tr.dayrow:hover td{background:#f4f7fd}
 tr.daysel td{background:#e8effc!important}
 .nocrm-tag{color:#b42318;font-weight:600;font-size:12px}
+.tl-h{cursor:pointer}
+.chip.tl-tog{padding:4px 10px;font-size:12px}
 .an-tile.t2{cursor:pointer;padding:10px 12px}
 .an-tile.t2 .l{font-size:12px;color:var(--ink2);font-weight:600;margin-bottom:2px}
 .an-tile.t2 .v{font-size:26px;line-height:1.15}
@@ -719,10 +721,11 @@ function drawDaily(rows){
   const tlRows=TL.filter(x=>x[1]===tlG&&dayKey(x[2]*1000)===tDay&&okU(x[3])).sort((a,b)=>b[2]-a[2]);
   const tlCnt=g=>TL.filter(x=>x[1]===g&&dayKey(x[2]*1000)===tDay&&okU(x[3])).length;
   const tlTime=s=>new Date(s*1000).toLocaleTimeString('ru-RU',{timeZone:'Europe/Kiev',hour:'2-digit',minute:'2-digit'});
-  const taskCard=`<div class="card" id="taskCard"><div class="vb-h tb-h"><h3>${tlG===12?'Торги':'Просчёты'} за ${dFmt(tDay)}</h3><span class="muted small">${wd(tDay)} · клик по дню в таблице выше — показать другой день</span><span style="flex:1"></span>
+  const taskCard=`<div class="card" id="taskCard"><div class="vb-h tb-h"><h3 class="tl-h" data-tlopen>${tlG===12?'Торги':'Просчёты'} за ${dFmt(tDay)}</h3><span class="muted small">${wd(tDay)} · клик по дню в таблице выше — показать задачи за этот день</span><span style="flex:1"></span>
     <select class="din" data-tday>${pDays.slice().reverse().map(d=>`<option value="${d}" ${d===tDay?'selected':''}>${dFmt(d)} ${wd(d)}</option>`).join('')}</select>
-    <span class="seg2"><button data-tlg="12" class="${tlG===12?'on':''}">Торги (${tlCnt(12)})</button><button data-tlg="10" class="${tlG===10?'on':''}">Просчёты (${tlCnt(10)})</button></span></div>
-    ${!D.tasks?'<div class="empty">Список появится после ближайшего обновления данных (в начале часа).</div>'
+    <span class="seg2"><button data-tlg="12" class="${tlG===12?'on':''}">Торги (${tlCnt(12)})</button><button data-tlg="10" class="${tlG===10?'on':''}">Просчёты (${tlCnt(10)})</button></span>
+    <button class="chip tl-tog" data-tlopen>${st.tlOpen?'Скрыть список ▴':'Показать список ▾'}</button></div>
+    ${!st.tlOpen?'':!D.tasks?'<div class="empty">Список появится после ближайшего обновления данных (в начале часа).</div>'
      :tlFrom&&tDay<tlFrom?`<div class="empty">Список задач хранится за последние 45 дней — за ${dFmt(tDay)} его нет.</div>`
      :tlRows.length?`<div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>Время</th><th>Задача</th><th>Кто поставил</th><th class="hide-m">Офис</th><th>Сделка</th></tr></thead><tbody>
       ${tlRows.map(x=>`<tr><td class="small">${tlTime(x[2])}</td><td class="nc-task"><a href="${D.portal}/workgroups/group/${x[1]}/tasks/task/view/${x[0]}/" target="_blank" rel="noopener">№${x[0]}</a> <span class="nc-t">${esc(x[4]||'')}</span></td><td>${esc(U[x[3]]?U[x[3]].n:'')}</td><td class="small muted hide-m">${esc(U[x[3]]?U[x[3]].office:'')}</td><td class="small">${x[5]?`<a href="${D.portal}/crm/deal/details/${x[5]}/" target="_blank" rel="noopener">#${x[5]}</a>`:'<span class="nocrm-tag">без CRM</span>'}</td></tr>`).join('')}
@@ -789,9 +792,10 @@ function drawDaily(rows){
     if(e2) e2.onchange=()=>{ st.cTo=val('cTo'); re(); }; }
   vbox.querySelectorAll('[data-dm]').forEach(x=>x.onclick=()=>{st.dayM=+x.dataset.dm; re();});
   vbox.querySelectorAll('[data-msel]').forEach(x=>x.onchange=()=>{st.dayM=+x.value; re();});
-  vbox.querySelectorAll('tr.dayrow').forEach(x=>x.onclick=()=>{ st.taskDay=x.dataset.day; if(M===4||M===5) st.tlG=(M===5?10:12); re(); setTimeout(()=>{ const c=document.getElementById('taskCard'); if(c) c.scrollIntoView({behavior:'smooth',block:'start'}); },30); });
-  vbox.querySelectorAll('[data-tday]').forEach(x=>x.onchange=()=>{ st.taskDay=x.value; re(); });
-  vbox.querySelectorAll('[data-tlg]').forEach(x=>x.onclick=()=>{ st.tlG=+x.dataset.tlg; re(); });
+  vbox.querySelectorAll('[data-tlopen]').forEach(x=>x.onclick=()=>{ st.tlOpen=!st.tlOpen; re(); });
+  vbox.querySelectorAll('tr.dayrow').forEach(x=>x.onclick=()=>{ st.taskDay=x.dataset.day; st.tlOpen=true; if(M===4||M===5) st.tlG=(M===5?10:12); re(); setTimeout(()=>{ const c=document.getElementById('taskCard'); if(c) c.scrollIntoView({behavior:'smooth',block:'start'}); },30); });
+  vbox.querySelectorAll('[data-tday]').forEach(x=>x.onchange=()=>{ st.taskDay=x.value; st.tlOpen=true; re(); });
+  vbox.querySelectorAll('[data-tlg]').forEach(x=>x.onclick=()=>{ st.tlG=+x.dataset.tlg; st.tlOpen=true; re(); });
   vbox.querySelectorAll('[data-tm]').forEach(x=>x.onclick=()=>{ const [k,v]=x.dataset.tm.split(':'); st[k]=v==='1'; re(); });
   vbox.querySelectorAll('[data-by]').forEach(x=>x.onclick=()=>{st.anBy=x.dataset.by; re();});
   vbox.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{ if(st.anBy==='m'){ st.mgr=e.dataset.k; st.office=U[st.mgr].office; st.grp=U[st.mgr].grp; } else st.office=e.dataset.k; fillSelects(); render(); });
