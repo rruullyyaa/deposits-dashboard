@@ -39,6 +39,7 @@ WIN_DAYS = 30        # за сколько дней брать выигранн�
 DAILY_DAYS = 90      # за сколько дней пересчитывать статистику «по дням» (восстановление задним числом)
 DAILY_KEEP_DAYS = 400  # сколько дней хранить статистику «по дням»
 NOCRM_FROM = "2026-11-18"  # вкладка «Задачи без CRM»: задачи, поставленные начиная с этого дня (Киев)
+TASKLIST_DAYS = 45  # список торгов/просчётов (со ссылками) для «Аналитика → По дням»
 TEAM_ROOT_DEPARTMENTS = {"75", "40", "89"}  # «Отдел продаж», «Отдел покупок», «B2B» — все их менеджеры в списках
 TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
@@ -456,6 +457,10 @@ def collect(bx, now_ms):
         })
         for t in tasks:  # задачи без сделки в поле CRM — для вкладки «Задачи без CRM»
             cr = ms(t.get("createdDate"))
+            if cr and cr >= tasklist_from:  # список задач по дням: [id, проект, создана (сек), кто, название, сделка]
+                deal = next((x[2:] for x in (t.get("ufCrmTask") or []) if str(x).startswith("D_")), "")
+                tasklist.append([int(t.get("id")), group_id, cr // 1000, str(t.get("createdBy") or ""),
+                                 task_title(t.get("title") or "")[:90], int(deal) if deal.isdigit() else 0])
             if not (t.get("ufCrmTask") or []) and cr and cr >= nocrm_from:
                 nocrm.append({"id": str(t.get("id")), "g": group_id, "t": task_title(t.get("title") or "")[:160],
                               "m": str(t.get("createdBy") or ""), "mn": (t.get("creator") or {}).get("name") or "",
@@ -490,6 +495,8 @@ def collect(bx, now_ms):
     nocrm_from = int(dt.datetime.combine(dt.date.fromisoformat(NOCRM_FROM), dt.time(0, 0),
                                          ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
     nocrm = []
+    tasklist = []
+    tasklist_from = now_ms - TASKLIST_DAYS * DAY_MS
     torgs, torg_stat = match_group(TORG_GROUP_ID)
     calcs, calc_stat = match_group(CALC_GROUP_ID)
 
@@ -656,6 +663,7 @@ def collect(bx, now_ms):
         "wins": win_rows,
         "nocrm": sorted(nocrm, key=lambda x: -x["cr"]),
         "nocrmFrom": nocrm_from,
+        "tasks": sorted(tasklist, key=lambda x: -x[2]),
         "daily": daily,
         "depd": deposits_by_day(bx, now_ms, dep_stages, deals),
         "winDays": WIN_DAYS,
