@@ -38,6 +38,7 @@ WIN_STAGE = "7"      # «Выиграли — ждём оплату»: попа�
 WIN_DAYS = 30        # за сколько дней брать выигранные сделки для аналитики
 DAILY_DAYS = 90      # за сколько дней пересчитывать статистику «по дням» (восстановление задним числом)
 DAILY_KEEP_DAYS = 400  # сколько дней хранить статистику «по дням»
+NOCRM_FROM = "2026-11-18"  # вкладка «Задачи без CRM»: задачи, поставленные начиная с этого дня (Киев)
 TEAM_ROOT_DEPARTMENTS = {"75", "40", "89"}  # «Отдел продаж», «Отдел покупок», «B2B» — все их менеджеры в списках
 TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
@@ -168,6 +169,16 @@ def ms(s):
         return int(dt.datetime.fromisoformat(s).timestamp() * 1000)
     except ValueError:
         return None
+
+
+PHONE_IN_TASK = re.compile(r"(?<![\w+])(\+\d[\d\s\-()]{8,}\d|(?:38)?0\d{2}[\s\-()]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2})(?!\w)")
+
+
+def task_title(s):
+    """Название задачи без телефонов клиента; лоты (8 цифр) и VIN оставляем."""
+    s = PHONE_IN_TASK.sub("", s or "")
+    s = re.sub(r"\s+", " ", s).strip()
+    return re.sub(r"(\s*[-—–,;:/|]\s*)+$", "", s).strip()
 
 
 def clean_title(s):
@@ -441,8 +452,14 @@ def collect(bx, now_ms):
     def match_group(group_id):
         tasks = bx.all("tasks.task.list", {
             "filter": {"GROUP_ID": group_id, ">=CREATED_DATE": since.strftime("%Y-%m-%d")},
-            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "UF_CRM_TASK", "CREATED_BY"],
+            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "UF_CRM_TASK", "CREATED_BY", "RESPONSIBLE_ID"],
         })
+        for t in tasks:  # задачи без сделки в поле CRM — для вкладки «Задачи без CRM»
+            cr = ms(t.get("createdDate"))
+            if not (t.get("ufCrmTask") or []) and cr and cr >= nocrm_from:
+                nocrm.append({"id": str(t.get("id")), "g": group_id, "t": task_title(t.get("title") or "")[:160],
+                              "m": str(t.get("createdBy") or ""), "mn": (t.get("creator") or {}).get("name") or "",
+                              "rn": (t.get("responsible") or {}).get("name") or "", "cr": cr})
         task_log.extend((group_id, ms(t.get("createdDate")), str(t.get("createdBy") or "")) for t in tasks)
         found, linked = {}, 0
         for t in tasks:
@@ -469,6 +486,10 @@ def collect(bx, now_ms):
         return found, {"tasks": len(tasks), "linked": linked}
 
     task_log = []  # (проект, когда создана, кто поставил) — для статистики по дням
+    from zoneinfo import ZoneInfo
+    nocrm_from = int(dt.datetime.combine(dt.date.fromisoformat(NOCRM_FROM), dt.time(0, 0),
+                                         ZoneInfo("Europe/Kyiv")).timestamp() * 1000)
+    nocrm = []
     torgs, torg_stat = match_group(TORG_GROUP_ID)
     calcs, calc_stat = match_group(CALC_GROUP_ID)
 
@@ -633,6 +654,8 @@ def collect(bx, now_ms):
         "users": users,
         "deals": rows,
         "wins": win_rows,
+        "nocrm": sorted(nocrm, key=lambda x: -x["cr"]),
+        "nocrmFrom": nocrm_from,
         "daily": daily,
         "depd": deposits_by_day(bx, now_ms, dep_stages, deals),
         "winDays": WIN_DAYS,
