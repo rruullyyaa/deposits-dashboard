@@ -642,17 +642,19 @@ function drawDaily(rows){
   function stats(days){
     const per=days.map(d=>{ const v=[0,0,0,0,0,0]; Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(okU(m)) x.forEach((y,i)=>v[i]+=y); }); return {d,v,nd:!daily[d]&&d<first}; });
     const tot=[0,0,0,0,0,0]; per.forEach(p=>p.v.forEach((x,i)=>tot[i]+=x));
-    const work=per.filter(p=>p.d!==today&&p.v.some(x=>x>0));
+    // сегодняшний день идёт — в среднее не входит; но если в периоде нет других дней с данными, берём сегодня
+    const onlyToday=!per.some(p=>p.d!==today&&p.v.some(x=>x>0)), useDay=d=>onlyToday||d!==today;
+    const work=per.filter(p=>useDay(p.d)&&p.v.some(x=>x>0));
     const avg=tot.map((_,i)=>work.length?work.reduce((s,p)=>s+p.v[i],0)/work.length:null);
     const agg=new Map();
-    days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],w:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); x.forEach((y,i)=>g.v[i]+=y); if(d!==today&&x.some(y=>y>0)){ g.act.add(d); x.forEach((y,i)=>g.w[i]+=y); } }));
+    days.forEach(d=>Object.entries(daily[d]||{}).forEach(([m,x])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],w:[0,0,0,0,0,0],act:new Set()}); const g=agg.get(k); x.forEach((y,i)=>g.v[i]+=y); if(useDay(d)&&x.some(y=>y>0)){ g.act.add(d); x.forEach((y,i)=>g.w[i]+=y); } }));
     // депозиты в работе на конец дня
     per.forEach(p=>{ const r=depd[p.d]; p.dp=r?Object.entries(r).reduce((s,[m,n])=>s+(okU(m)?n:0),0):null; });
     const dps=per.filter(p=>p.dp!=null), depAvg=dps.length?dps.reduce((s,p)=>s+p.dp,0)/dps.length:null, depEnd=dps.length?dps[dps.length-1].dp:null;
     const dDays=days.filter(d=>depd[d]);
     days.forEach(d=>Object.entries(depd[d]||{}).forEach(([m,n])=>{ if(!okU(m)) return; const k=st.anBy==='m'?m:U[m].office; if(!agg.has(k)) agg.set(k,{v:[0,0,0,0,0,0],w:[0,0,0,0,0,0],act:new Set()}); agg.get(k).dp=(agg.get(k).dp||0)+n; }));
     agg.forEach(g=>{ g.dpAvg=dDays.length?(g.dp||0)/dDays.length:null; });
-    return {per,tot,avg,work:work.length,agg,nodata:per.filter(p=>p.nd).length,approx:days.some(d=>d<EXACT_FROM&&daily[d]),depAvg,depEnd};
+    return {onlyToday:onlyToday&&per.some(p=>p.d===today),per,tot,avg,work:work.length,agg,nodata:per.filter(p=>p.nd).length,approx:days.some(d=>d<EXACT_FROM&&daily[d]),depAvg,depEnd};
   }
   const S=stats(dRange(a,b)), C=c?stats(dRange(c[0],c[1])):null, TDs=stats([today]), TD=TDs.tot;
   const f2=v=>v==null||isNaN(v)||!isFinite(v)?'—':(Math.round(v*100)/100).toLocaleString('ru-RU');
@@ -746,7 +748,7 @@ function drawDaily(rows){
       ${st.cmp==='custom'?`<label class="dl-in">с ${dateIn('cFrom',c[0])} по ${dateIn('cTo',c[1])}</label>`:''}</div>
     <div class="small muted" style="margin:2px 0 8px">Сейчас: <b style="color:var(--ink)">${pTxt(a,b)}</b> (${S.per.length} дн., рабочих ${S.work})${C?` · сравнение: <b style="color:var(--ink)">${pTxt(c[0],c[1])}</b> (${C.per.length} дн., рабочих ${C.work})`:''}</div>
     ${warn.length?`<div class="small" style="color:#b54708;margin:0 0 8px">⚠ ${warn.join('; ')}.</div>`:''}
-    <div class="an-tiles">${[{l:'Депозиты в работе',v:S.depAvg,o:C&&C.depAvg,s:'в среднем по дням',i:6,h:'Сколько сделок было в депозитных стадиях — в среднем по дням периода'},...DM.map((m,i)=>({l:DSH[i],v:S.avg[i],o:C&&C.avg[i],s:'в рабочий день',i,h:m.h||''}))].map(x=>`<div class="an-tile t2${x.i===6?' dep-tile':''}${M===x.i?' sel':''}" title="${x.h}" data-dm="${x.i}"><div class="l">${x.l}</div><div class="v">${f1(x.v)}${C?' '+dlt(x.v,x.o):''}</div><div class="s">${x.s}</div></div>`).join('')}</div>
+    <div class="an-tiles">${[{l:'Депозиты в работе',v:S.depAvg,o:C&&C.depAvg,s:'в среднем по дням',i:6,h:'Сколько сделок было в депозитных стадиях — в среднем по дням периода'},...DM.map((m,i)=>({l:DSH[i],v:S.avg[i],o:C&&C.avg[i],s:S.onlyToday?'сегодня, день идёт':'в рабочий день',i,h:m.h||''}))].map(x=>`<div class="an-tile t2${x.i===6?' dep-tile':''}${M===x.i?' sel':''}" title="${x.h}" data-dm="${x.i}"><div class="l">${x.l}</div><div class="v">${f1(x.v)}${C?' '+dlt(x.v,x.o):''}</div><div class="s">${x.s}</div></div>`).join('')}</div>
     ${cmpTable}
     <div class="lg"><span><i style="background:#3b6fd4"></i>${MN} — будни${C?' (выбранный период)':''}</span><span><i style="background:#b9c7e6"></i>выходные</span>${S.per.some(p=>p.d===today)?'<span><i style="background:#c9d8f6"></i>сегодня (день идёт)</span>':''}${C?'<span><i style="background:#d6d3cb"></i>период сравнения (день за днём)</span>':''}<span class="muted">клик по плитке — показать на графике</span></div>
     ${svg}</div>
