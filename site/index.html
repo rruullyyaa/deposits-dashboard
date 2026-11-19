@@ -868,24 +868,25 @@ function drawTrend(){
 st.ncG='all';
 const NCG={12:'Торги',10:'Просчёт'};
 function ncList(){ const any=st.grp||st.office||st.mgr;
-  return (D.nocrm||[]).filter(x=>{ const u=U[x.m]; if(!u) return !any; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||x.m===st.mgr); }); }
-function ncBadge(){ const n=(D.nocrm||[]).length, b=document.getElementById('ncBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }
+  const td=dayKey(NOW);
+  return (D.nocrm||[]).filter(x=>dayKey(x.cr)===td).filter(x=>{ const u=U[x.m]; if(!u) return !any; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||x.m===st.mgr); }); }
+function ncBadge(){ const td=dayKey(NOW), n=(D.nocrm||[]).filter(x=>dayKey(x.cr)===td).length, b=document.getElementById('ncBadge'); if(b){ b.textContent=n||''; b.style.display=n?'':'none'; } }
 function drawNoCrm(){
-  const from=D.nocrmFrom?new Date(D.nocrmFrom).toLocaleDateString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit'}):'';
+  const from='сегодня, '+new Date(NOW).toLocaleDateString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit'});
   if(!D.nocrm){ vbox.innerHTML=`<div class="card"><div class="empty">Данные появятся после ближайшего обновления (в начале часа).</div></div>`; return; }
   const all=ncList(), L=all.filter(x=>st.ncG==='all'||String(x.g)===st.ncG);
-  const when=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  const when=ts=>new Date(ts).toLocaleTimeString('ru-RU',{timeZone:'Europe/Kiev',hour:'2-digit',minute:'2-digit'});
   const who=x=>U[x.m]?U[x.m].n:(x.mn||('ID '+x.m)), off=x=>U[x.m]?U[x.m].office:'';
   const cnt=new Map(); all.forEach(x=>{ const k=who(x); cnt.set(k,(cnt.get(k)||0)+1); });
   const nT=all.filter(x=>x.g===12).length, nC=all.filter(x=>x.g===10).length;
-  vbox.innerHTML=`<div class="card"><div class="vb-h tb-h"><h3>Задачи без CRM</h3><span class="muted small">поставлены с ${from} без сделки в поле «CRM»</span><span style="flex:1"></span>
+  vbox.innerHTML=`<div class="card"><div class="vb-h tb-h"><h3>Задачи без CRM</h3><span class="muted small">поставлены ${from}, без сделки в поле «CRM»</span><span style="flex:1"></span>
     <span class="seg2">${[['all',`Все (${all.length})`],['12',`Торги (${nT})`],['10',`Просчёты (${nC})`]].map(([k,l])=>`<button data-ncg="${k}" class="${st.ncG===k?'on':''}">${l}</button>`).join('')}</span></div>
     ${L.length?`${cnt.size>1?`<div class="nc-who">${[...cnt.entries()].sort((a,b)=>b[1]-a[1]).map(([n,c])=>`<span class="nc-pill">${esc(n)} <b>${c}</b></span>`).join('')}</div>`:''}
-    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>Когда</th><th>Задача</th><th>Проект</th><th>Кто поставил</th><th class="hide-m">Офис</th><th class="hide-m">Ответственный</th></tr></thead><tbody>
+    <div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>Время</th><th>Задача</th><th>Проект</th><th>Кто поставил</th><th class="hide-m">Офис</th><th class="hide-m">Ответственный</th></tr></thead><tbody>
     ${L.map(x=>`<tr><td class="small" style="white-space:nowrap">${when(x.cr)}</td><td class="nc-task"><a href="${D.portal}/workgroups/group/${x.g}/tasks/task/view/${x.id}/" target="_blank" rel="noopener">№${x.id}</a> <span class="nc-t">${esc(x.t||'')}</span></td><td class="small">${NCG[x.g]||x.g}</td><td>${esc(who(x))}</td><td class="small muted hide-m">${esc(off(x))}</td><td class="small muted hide-m">${esc(x.rn||'')}</td></tr>`).join('')}
     </tbody></table></div>`
-    :`<div class="empty">С ${from} задач без CRM нет${st.grp||st.office||st.mgr?' по выбранному отделу / офису / менеджеру':''} — все поставлены из сделки.</div>`}</div>
-  <div class="note">Здесь задачи из проектов «1.2 Торги» и «1.1 Расчет ремонта США/Канада», у которых не указана сделка клиента в поле «CRM» — то есть поставленные не из карточки сделки. Показываются задачи, созданные с ${from}; старые не показываются. Как только в задаче укажут сделку, она пропадёт отсюда при ближайшем обновлении (раз в час). Фильтры по отделу, офису и менеджеру применяются; стадии и направление — нет.</div>`;
+    :`<div class="empty">${from[0].toUpperCase()+from.slice(1)} задач без CRM нет${st.grp||st.office||st.mgr?' по выбранному отделу / офису / менеджеру':''} — все поставлены из сделки.</div>`}</div>
+  <div class="note">Здесь задачи из проектов «1.2 Торги» и «1.1 Расчет ремонта США/Канада», у которых не указана сделка клиента в поле «CRM» — то есть поставленные не из карточки сделки. Показываются только задачи, поставленные сегодня; за прошлые дни их можно найти в «Аналитика → По дням» → список торгов и просчётов (отметка «без CRM»). Как только в задаче укажут сделку, она пропадёт отсюда при ближайшем обновлении (раз в час). Фильтры по отделу, офису и менеджеру применяются; стадии и направление — нет.</div>`;
   vbox.querySelectorAll('[data-ncg]').forEach(b=>b.onclick=()=>{st.ncG=b.dataset.ncg; drawNoCrm();});
 }
 function render(){
