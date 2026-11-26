@@ -704,20 +704,35 @@ def site_url():
     return None
 
 
+SEED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "history", "seed.enc.json")
+
+
 def load_previous(password):
-    """Прошлые данные (снимки, статистика по дням) берём из уже опубликованного data.enc.json — без коммитов."""
+    """Прошлые данные (снимки, статистика по дням) берём из уже опубликованного data.enc.json — без коммитов.
+    Если сайт недоступен (например, сразу после переноса репозитория на другой аккаунт — адрес сайта меняется),
+    берём сохранённую копию из history/seed.enc.json, если она есть в репозитории."""
+    if not password:
+        return {}
     url = site_url()
-    if not url or not password:
-        return {}
-    try:
-        req = urllib.request.Request(f"{url}data.enc.json?t={int(time.time())}", headers={"Cache-Control": "no-cache"})
-        with urllib.request.urlopen(req, timeout=30) as r:
-            prev = json.loads(decrypt(json.loads(r.read().decode()), password))
-        print(f"История: загружено снимков {len(prev.get('hist') or [])}, дней статистики {len(prev.get('daily') or {})}")
-        return prev
-    except Exception as e:  # первый запуск, смена пароля, сайт недоступен
-        print(f"История: начинаем заново ({type(e).__name__})")
-        return {}
+    if url:
+        try:
+            req = urllib.request.Request(f"{url}data.enc.json?t={int(time.time())}", headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                prev = json.loads(decrypt(json.loads(r.read().decode()), password))
+            print(f"История: загружено снимков {len(prev.get('hist') or [])}, дней статистики {len(prev.get('daily') or {})}")
+            return prev
+        except Exception as e:  # первый запуск, смена пароля, сайт недоступен
+            print(f"История: с сайта не загрузилась ({type(e).__name__})")
+    if os.path.exists(SEED_FILE):
+        try:
+            with open(SEED_FILE, encoding="utf-8") as f:
+                prev = json.loads(decrypt(json.load(f), password))
+            print(f"История: взята из {os.path.relpath(SEED_FILE)} — дней статистики {len(prev.get('daily') or {})}")
+            return prev
+        except Exception as e:
+            print(f"История: копия не прочиталась ({type(e).__name__})")
+    print("История: начинаем заново")
+    return {}
 
 
 def merge_daily(prev, cur, now_ms):
