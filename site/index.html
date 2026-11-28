@@ -901,11 +901,12 @@ function drawNoCrm(){
 
 // ---- ставки: наша максимальная ставка из задачи торгов vs финальная ставка на bid.cars
 st.bidP='7'; st.bidF='all'; st.bidM='';
-const BID_NA={ca:'Канада — на bid.cars нет',manheim:'Manheim — на bid.cars нет',other:'не Copart / IAAI',nolot:'лот не найден в задаче',nobid:'ставка не указана',cad:'ставка в CAD',nf:'лот не найден на bid.cars',wait:'ждём финал',hidden:'финал скрыт'};
+const BID_NA={ca:'Канада — на bid.cars нет',manheim:'Manheim — на bid.cars нет',other:'не Copart / IAAI',nolot:'лот не найден в задаче',nobid:'ставка не указана',cad:'ставка в CAD',nf:'лот не найден на bid.cars',wait:'ждём финал',hidden:'финал скрыт',relist:'перевыставлен, продан позже'};
 function bidRow(x){
   if(x.src==='ca'||x.src==='manheim'||x.src==='other') return {k:'na',why:x.src};
   if(!x.lot) return {k:'na',why:'nolot'};
   if(x.fin==null) return {k:'na',why:x.fst==='nf'?'nf':x.fst==='hidden'?'hidden':'wait'};
+  if(x.fd&&x.fd>dayKey(x.ts*1000+86400000)) return {k:'na',why:'relist'};
   if(!x.bid) return {k:'na',why:'nobid'};
   if(x.cur!=='USD') return {k:'na',why:'cad'};
   const d=x.fin-x.bid; return d>0?{k:'lose',d,p:d/x.fin}:{k:'win',d};
