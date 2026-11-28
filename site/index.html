@@ -213,6 +213,14 @@ table.cmp td.gap,table.cmp th.gap{width:10px;padding:0;background:transparent}
 table.cmp tr.dep-row td{background:#f4f7fd}
 table.cmp td .dl{font-size:12px}
 .tb-h{align-items:center;gap:8px 10px}
+/* ставки vs финал bid.cars */
+.bd-res{display:inline-block;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:600;white-space:nowrap}
+.bd-res.win{background:var(--green-bg);color:#256c33}
+.bd-res.lose{background:var(--red-bg);color:#a8401f}
+.bd-res.na{background:#f2f1ec;color:var(--ink3);font-weight:500}
+.an-tile.t2.win .v{color:#256c33}.an-tile.t2.lose .v{color:#a8401f}
+.bd-short{color:#a8401f;font-weight:600}
+tr.bd-mrow{cursor:pointer} tr.bd-mrow:hover td{background:#f4f7fd} tr.bd-msel td{background:#e8effc!important}
 table.one td.gl,table.one th.gl{border-left:1px solid var(--line)}
 table.one td.muted,table.one th.muted{color:var(--ink3)}
 table.one td .dl{font-size:12px}
@@ -286,6 +294,7 @@ table.one td .dl{font-size:12px}
     <button class="chip" data-view="rating">Рейтинг</button>
     <button class="chip" data-view="trend">Динамика</button>
     <button class="chip" data-view="anal">Аналитика</button>
+    <button class="chip" data-view="bids">Ставки</button>
     <button class="chip nc-chip" data-view="nocrm">Задачи без CRM <span class="nc-badge" id="ncBadge"></span></button>
     <span class="sp"></span>
     <label class="opt" style="margin:0"><input type="checkbox" id="onlyBad"> только с просрочкой</label>
@@ -889,15 +898,74 @@ function drawNoCrm(){
   <div class="note">Здесь задачи из проектов «1.2 Торги» и «1.1 Расчет ремонта США/Канада», у которых не указана сделка клиента в поле «CRM» — то есть поставленные не из карточки сделки. Показываются только задачи, поставленные сегодня; за прошлые дни их можно найти в «Аналитика → По дням» → список торгов и просчётов (отметка «без CRM»). Как только в задаче укажут сделку, она пропадёт отсюда при ближайшем обновлении (раз в час). Фильтры по отделу, офису и менеджеру применяются; стадии и направление — нет.</div>`;
   vbox.querySelectorAll('[data-ncg]').forEach(b=>b.onclick=()=>{st.ncG=b.dataset.ncg; drawNoCrm();});
 }
+
+// ---- ставки: наша максимальная ставка из задачи торгов vs финальная ставка на bid.cars
+st.bidP='7'; st.bidF='all'; st.bidM='';
+const BID_NA={ca:'Канада — на bid.cars нет',manheim:'Manheim — на bid.cars нет',other:'не Copart / IAAI',nolot:'лот не найден в задаче',nobid:'ставка не указана',cad:'ставка в CAD',nf:'лот не найден на bid.cars',wait:'ждём финал',hidden:'финал скрыт'};
+function bidRow(x){
+  if(x.src==='ca'||x.src==='manheim'||x.src==='other') return {k:'na',why:x.src};
+  if(!x.lot) return {k:'na',why:'nolot'};
+  if(x.fin==null) return {k:'na',why:x.fst==='nf'?'nf':x.fst==='hidden'?'hidden':'wait'};
+  if(!x.bid) return {k:'na',why:'nobid'};
+  if(x.cur!=='USD') return {k:'na',why:'cad'};
+  const d=x.fin-x.bid; return d>0?{k:'lose',d,p:d/x.fin}:{k:'win',d};
+}
+function drawBids(){
+  if(!D.bids){ vbox.innerHTML=`<div class="card"><div class="empty">Данные появятся после ближайшего обновления (в начале часа).</div></div>`; return; }
+  const money=v=>'$'+Math.round(v).toLocaleString('ru-RU');
+  const today=dayKey(NOW);
+  const P={'1':['Вчера',1],'7':['7 дней',7],'30':['30 дней',30]};
+  const days=new Set(); for(let i=1;i<=P[st.bidP][1];i++) days.add(dayKey(NOW-i*86400000));
+  if(st.bidP!=='1') days.add(today);
+  const any=st.grp||st.office||st.mgr;
+  const inScope=x=>{ const u=U[x.m]; if(!u) return !any; return (!st.grp||u.grp===st.grp)&&(!st.office||u.office===st.office)&&(!st.mgr||x.m===st.mgr); };
+  const all=D.bids.filter(x=>x.ts*1000<=NOW && days.has(dayKey(x.ts*1000)) && inScope(x)).map(x=>Object.assign({},x,bidRow(x)));
+  const who=m=>U[m]?U[m].n:('ID '+m), off=m=>U[m]?U[m].office:'';
+  const cmp=all.filter(x=>x.k!=='na'), win=cmp.filter(x=>x.k==='win'), lose=cmp.filter(x=>x.k==='lose'), na=all.filter(x=>x.k==='na');
+  const avgD=lose.length?lose.reduce((a,x)=>a+x.d,0)/lose.length:0, avgP=lose.length?lose.reduce((a,x)=>a+x.p,0)/lose.length*100:0;
+  // по менеджерам
+  const byM=new Map(); all.forEach(x=>{ const r=byM.get(x.m)||{m:x.m,n:0,c:0,w:0,l:0,sd:0,sp:0}; r.n++; if(x.k!=='na'){r.c++; if(x.k==='win') r.w++; else {r.l++; r.sd+=x.d; r.sp+=x.p;}} byM.set(x.m,r); });
+  const mrows=[...byM.values()].sort((a,b)=>b.n-a.n||who(a.m).localeCompare(who(b.m)));
+  if(st.bidM&&!byM.has(st.bidM)) st.bidM='';
+  let L=all.filter(x=>!st.bidM||x.m===st.bidM);
+  if(st.bidF!=='all') L=L.filter(x=>x.k===st.bidF);
+  L.sort((a,b)=>b.ts-a.ts);
+  const when=ts=>new Date(ts*1000).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',','');
+  const upd=D.finalsUpdated?new Date(D.finalsUpdated).toLocaleString('ru-RU',{timeZone:'Europe/Kiev',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).replace(',',''):'ещё не собирались';
+  const tile=(k,l,v,sub,cls)=>`<div class="an-tile t2 ${cls||''}${st.bidF===k?' sel':''}" data-bf="${k}"><div class="l">${l}</div><div class="v">${v}</div><div class="s">${sub}</div></div>`;
+  const res=x=>x.k==='win'?`<span class="bd-res win">${x.d===0?'= финалу':'≥ финала'}</span>`:x.k==='lose'?`<span class="bd-res lose">не хватило</span>`:`<span class="bd-res na">${BID_NA[x.why]||x.why}</span>`;
+  vbox.innerHTML=`<div class="card"><div class="vb-h tb-h"><h3>Ставки: наша vs финал</h3><span class="muted small">по времени аукциона · финалы с bid.cars: ${upd}</span><span style="flex:1"></span>
+    <span class="seg2">${Object.entries(P).map(([k,[l]])=>`<button data-bp="${k}" class="${st.bidP===k?'on':''}">${l}</button>`).join('')}</span></div>
+    <div class="an-tiles">
+      ${tile('all','Торгов',all.length,`сравнили ${cmp.length}`)}
+      ${tile('win','Ставка ≥ финала',win.length,cmp.length?`${Math.round(win.length/cmp.length*100)}% · скорее всего выиграли`:'скорее всего выиграли','win')}
+      ${tile('lose','Не хватило',lose.length,lose.length?`в среднем ${money(avgD)} · ${Math.round(avgP)}%`:'—','lose')}
+      ${tile('na','Без сравнения',na.length,'Канада, Manheim, нет ставки…')}
+    </div>
+    ${mrows.length>1?`<div class="rtbl-wrap" style="margin-bottom:12px"><table class="rtbl"><thead><tr><th>Кто поставил</th><th class="hide-m">Офис</th><th class="num">Торгов</th><th class="num">Сравнили</th><th class="num">≥ финала</th><th class="num">Не хватило</th><th class="num">Недобор в среднем</th></tr></thead><tbody>
+      ${mrows.map(r=>`<tr class="bd-mrow${st.bidM===r.m?' bd-msel':''}" data-bm="${r.m}"><td>${esc(who(r.m))}</td><td class="small muted hide-m">${esc(off(r.m))}</td><td class="num">${r.n}</td><td class="num">${r.c}</td><td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.l?`${money(r.sd/r.l)} <span class="cnt">${Math.round(r.sp/r.l*100)}%</span>`:'—'}</td></tr>`).join('')}
+    </tbody></table></div>`:''}
+    ${st.bidM?`<div class="small" style="margin:0 0 8px">Показаны торги: <b>${esc(who(st.bidM))}</b> · <a href="#" data-bm="">показать всех</a></div>`:''}
+    ${L.length?`<div class="rtbl-wrap"><table class="rtbl"><thead><tr><th>Аукцион</th><th>Задача</th><th class="hide-m">Кто поставил</th><th class="num">Наша ставка</th><th class="num">Финал</th><th class="num">Разница</th><th>Итог</th></tr></thead><tbody>
+      ${L.map(x=>`<tr><td class="small" style="white-space:nowrap">${when(x.ts)}</td><td class="nc-task"><a href="${D.portal}/workgroups/group/12/tasks/task/view/${x.id}/" target="_blank" rel="noopener">№${x.id}</a> <span class="nc-t">${esc(x.t)}</span></td><td class="hide-m">${esc(who(x.m))}</td>
+        <td class="num">${x.bid?(x.cur==='USD'?money(x.bid):Math.round(x.bid).toLocaleString('ru-RU')+' '+x.cur)+(x.add?` <span class="cnt" title="в т.ч. добивка">+${x.add}</span>`:''):'<span class="muted">—</span>'}</td>
+        <td class="num">${x.fin!=null?`<a href="https://bid.cars/en/lot/${x.lot}" target="_blank" rel="noopener">${money(x.fin)}</a>${x.fd&&x.fd!==dayKey(x.ts*1000)?` <span class="cnt" title="дата продажи на bid.cars отличается от даты в задаче">${x.fd.slice(8,10)}.${x.fd.slice(5,7)}</span>`:''}`:(x.lot?`<a class="muted" href="https://bid.cars/en/lot/${x.lot}" target="_blank" rel="noopener">—</a>`:'<span class="muted">—</span>')}</td>
+        <td class="num">${x.k==='lose'?`<span class="bd-short">−${money(x.d)}</span> <span class="cnt">${Math.round(x.p*100)}%</span>`:x.k==='win'?(x.d<0?`+${money(-x.d)}`:'0'):''}</td><td>${res(x)}</td></tr>`).join('')}
+    </tbody></table></div>`:`<div class="empty">За выбранный период торгов${st.bidF!=='all'?' в этой группе':''} нет${any?' по выбранному отделу / офису / менеджеру':''}.</div>`}</div>
+  <div class="note"><b>Как считается.</b> Наша ставка — максимальная ставка из названия задачи в «1.2 Торги» вместе с добивкой («Ставка 4000 + 300 добив» = $4 300; «уже с добивкой» — без прибавки). Финал — финальная ставка лота на bid.cars (Copart и IAAI США), собирается раз в день после аукциона. «Ставка ≥ финала» — наша ставка была не меньше цены, за которую лот ушёл: скорее всего лот выиграли мы (или продавец не утвердил продажу). «Не хватило» — лот ушёл дороже нашей максимальной ставки. Канада (copart.ca, ca.iaai.com) и Manheim пока не сравниваются. Чтобы ставка распознавалась, пишите её в названии задачи одинаково: «Ставка 4000 + 300».</div>`;
+  vbox.querySelectorAll('[data-bp]').forEach(b=>b.onclick=()=>{st.bidP=b.dataset.bp; drawBids();});
+  vbox.querySelectorAll('[data-bf]').forEach(b=>b.onclick=()=>{st.bidF=st.bidF===b.dataset.bf?'all':b.dataset.bf; drawBids();});
+  vbox.querySelectorAll('[data-bm]').forEach(b=>b.onclick=e=>{e.preventDefault(); const m=b.dataset.bm; st.bidM=(st.bidM===m||!m)?'':m; drawBids();});
+}
 function render(){
   expandAll.style.display=st.group&&st.view==='deals'?'':'none';
   const rows=scoped();
   drawTiles(rows);
   const shown=rows.filter(passesActive);
-  const special=st.view==='rating'||st.view==='trend'||st.view==='anal'||st.view==='nocrm';
+  const special=st.view==='rating'||st.view==='trend'||st.view==='anal'||st.view==='nocrm'||st.view==='bids';
   document.getElementById('tblWrap').style.display=special?'none':''; vbox.style.display=special?'':'none';
-  document.getElementById('tools').style.display=(st.view==='trend'||st.view==='anal'||st.view==='nocrm')?'none':'';
-  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else if(st.view==='anal') drawAnal(rows); else if(st.view==='nocrm') drawNoCrm(); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
+  document.getElementById('tools').style.display=(st.view==='trend'||st.view==='anal'||st.view==='nocrm'||st.view==='bids')?'none':'';
+  if(st.view==='deals') drawDeals(shown); else if(st.view==='rating') drawRating(rows); else if(st.view==='trend') drawTrend(); else if(st.view==='anal') drawAnal(rows); else if(st.view==='nocrm') drawNoCrm(); else if(st.view==='bids') drawBids(); else drawAgg(st.active.size||st.onlyBad?shown:rows, st.view);
 }
 
 document.getElementById('note').innerHTML=`
