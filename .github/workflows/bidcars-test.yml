@@ -1,0 +1,52 @@
+name: Тест bid.cars (разовый)
+
+# Проверка: отдаёт ли bid.cars страницы лотов серверам GitHub и видна ли на них финальная ставка.
+# Запускается сам при изменении этого файла или вручную (Actions → «Тест bid.cars» → Run workflow).
+# Ничего не публикует и секретов не использует. После проверки файл можно удалить.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/bidcars-test.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Запросить лоты на bid.cars
+        shell: python
+        run: |
+          import re, time, urllib.request, urllib.error
+          LOTS = {"1-78249826": "4,700", "1-75277366": "11,200"}  # лот → цена, которую видно в браузере
+          UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/131.0 Safari/537.36")
+          ok = 0
+          for lot, expected in LOTS.items():
+              url = f"https://bid.cars/en/lot/{lot}"
+              req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "en"})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      status, final_url, html = r.status, r.geturl(), r.read().decode("utf-8", "replace")
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode("utf-8", "replace")
+                  challenge = bool(re.search(r"Just a moment|cf-chl|challenge-platform/h/", body))
+                  print(f"{lot}: HTTP {e.code}, проверка Cloudflare: {'да' if challenge else 'нет'}")
+                  continue
+              except Exception as e:
+                  print(f"{lot}: ошибка {type(e).__name__}: {e}")
+                  continue
+              m = re.search(r'price-box final.*?Final bid</span>\s*\$([\d,]+)', html, re.S)
+              got = m.group(1) if m else None
+              print(f"{lot}: HTTP {status}, {len(html)} байт, {final_url}")
+              print(f"   финальная ставка: {('$' + got) if got else 'не найдена'} (в браузере ${expected})")
+              if got == expected:
+                  ok += 1
+              time.sleep(3)
+          print(f"ИТОГ: совпало {ok} из {len(LOTS)}")
+          if ok == 0:
+              raise SystemExit(1)
