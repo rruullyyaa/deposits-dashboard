@@ -44,6 +44,8 @@ TEAM_ROOT_DEPARTMENTS = {"75", "40", "89"}  # «Отдел продаж», «О�
 TORG_GROUP_ID = 12   # проект «1.2 Торги»
 CALC_GROUP_ID = 10   # проект «1.1 Расчет ремонта США/Канада»
 TASKS_LOOKBACK_DAYS = 120  # сколько дней задач в проектах просматривать
+BIDS_DAYS = 45             # вкладка «Ставки»: торги за столько дней (наша ставка vs финальная на bid.cars)
+FINALS_FILE = "data/finals.json"  # финальные ставки с bid.cars (собираются раз в день через браузер, см. README)
 TALK_MIN_SEC = 30          # звонок короче — «недозвон», не разговор
 HIST_HOURLY_KEEP_H = 26    # почасовые снимки для сравнения «к вчера»
 HIST_DAILY_KEEP_D = 14     # по одному снимку в день — для истории
@@ -82,6 +84,70 @@ VIN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 LOT_IN_LINK = re.compile(r"(?:copart\.com/lot/|VehicleDetail/)(\d{6,9})", re.I)
 LOT_8 = re.compile(r"(?:lot/|VehicleDetail/|\b)(\d{8})\b")
 PHONE = re.compile(r"\d[\d\s\-()]{8,}\d")
+
+# ---- ставка в задаче торгов: «Макс ставка 20 900 + 200$», «Ставка=8700!!», «ставка 3300 уже с добивкой» …
+_NUM = r"(\d{1,3}(?:[ \u00a0]\d{3})+(?![\d])|\d{1,3}(?:,\d{3})+(?![\d])|\d{3,6}(?![\d]))"
+_CUR = r"(?:\s*(?:\$|usd|cad|кад\w*|дол\w*|канадск\w*(?:\s+доллар\w*)?))?"
+BID_KW = re.compile(r"(?:макс\w*\.?\s*)?(?:[сc]тавк\w*|макс\w*)\s*[=:\-–]?\s*\$?\s*" + _NUM, re.I)
+BID_BEFORE_KW = re.compile(_NUM + _CUR + r"\s*макс\w*(?:\s*[сc]тавк\w*)?", re.I)
+BID_BANG = re.compile(_NUM + r"\s*\$?\s*!{2,}")
+BID_AFTER_VIN = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b[\s\-–/]+" + _NUM + r"(?=\s*(?:\$|\(|$))", re.I)
+BID_INCL = re.compile(r"^.{0,25}?(?:уже|это|вже)\s+(?:с|з)\s+добив", re.I)
+BID_NO_ADD = re.compile(r"^.{0,25}?без\s+добив", re.I)
+BID_ADD = re.compile(r"^" + _CUR + r"\s*[-–,/]?\s*(?:\+\s*(?:добив\w*|добавк\w*)?|добив\w*|добавк\w*)\s*[=:]?\s*\$?\s*(\d{2,4})(?![\d])", re.I)
+CAD_WORD = re.compile(r"кад|\bcad\b|канад", re.I)
+
+
+def _num(s):
+    return int(re.sub(r"\D", "", s))
+
+
+def parse_bid(title):
+    """Наша максимальная ставка из названия задачи: (сумма с добивкой, добивка, валюта) или (0, 0, cur)."""
+    t = BBCODE.sub(" ", title or "")
+    cur = "CAD" if CAD_WORD.search(t) else "USD"
+    m = BID_KW.search(t) or BID_BEFORE_KW.search(t) or BID_BANG.search(t) or BID_AFTER_VIN.search(t)
+    if not m:
+        return 0, 0, cur
+    base = _num(m.group(1))
+    if not 300 <= base <= 300000:
+        return 0, 0, cur
+    rest = t[m.end():]
+    add = 0
+    if not BID_INCL.search(rest) and not BID_NO_ADD.search(rest):
+        a = BID_ADD.search(rest)
+        if a and int(a.group(1)) < base:
+            add = int(a.group(1))
+    return base + add, add, cur
+
+
+def bidcars_lot(title, description):
+    """Лот в формате bid.cars: Copart США → «1-<лот>», IAAI США → «0-<сток>». Иначе (src, None)."""
+    text = f"{title or ''} {description or ''}"
+    if re.search(r"copart\.ca|ca\.iaai\.com|~CA\b|Imp_\d", text, re.I):
+        return "ca", None
+    m = re.search(r"copart\.com/lot/(\d{6,9})", text, re.I)
+    if m:
+        return "copart", "1-" + m.group(1)
+    if re.search(r"iaai\.com", text, re.I):
+        clean = VIN.sub(" ", (title or "").upper())
+        st = re.findall(r"(?<!\d)(\d{8})(?!\d)", clean)
+        return "iaai", ("0-" + st[0]) if st else None
+    if re.search(r"manheim", text, re.I):
+        return "manheim", None
+    return "other", None
+
+
+def load_finals():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), FINALS_FILE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        print(f"Финальные ставки: файл не прочитан ({type(e).__name__})")
+        return {}
 
 DAY_MS = 86_400_000
 PAUSE = 0.35  # секунд между запросами (лимит Bitrix24 ~2 запроса/сек)
@@ -453,7 +519,7 @@ def collect(bx, now_ms):
     def match_group(group_id):
         tasks = bx.all("tasks.task.list", {
             "filter": {"GROUP_ID": group_id, ">=CREATED_DATE": since.strftime("%Y-%m-%d")},
-            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "UF_CRM_TASK", "CREATED_BY", "RESPONSIBLE_ID"],
+            "select": ["ID", "TITLE", "DESCRIPTION", "CREATED_DATE", "DEADLINE", "UF_CRM_TASK", "CREATED_BY", "RESPONSIBLE_ID"],
         })
         for t in tasks:  # задачи без сделки в поле CRM — для вкладки «Задачи без CRM»
             cr = ms(t.get("createdDate"))
@@ -461,6 +527,15 @@ def collect(bx, now_ms):
                 deal = next((x[2:] for x in (t.get("ufCrmTask") or []) if str(x).startswith("D_")), "")
                 tasklist.append([int(t.get("id")), group_id, cr // 1000, str(t.get("createdBy") or ""),
                                  task_title(t.get("title") or "")[:90], int(deal) if deal.isdigit() else 0])
+            if group_id == TORG_GROUP_ID and cr and cr >= bids_from:  # вкладка «Ставки»
+                when = ms(t.get("deadline")) or cr
+                src, lot = bidcars_lot(t.get("title"), t.get("description"))
+                amount, add, cur = parse_bid(t.get("title"))
+                fin = (finals.get("lots") or {}).get(lot) if lot else None
+                bids.append({"id": int(t.get("id")), "m": str(t.get("createdBy") or ""), "ts": when // 1000,
+                             "t": task_title(t.get("title") or "")[:120], "src": src, "lot": lot,
+                             "bid": amount, "add": add, "cur": cur,
+                             "fin": (fin or {}).get("f"), "fst": (fin or {}).get("s"), "fd": (fin or {}).get("d")})
             if not (t.get("ufCrmTask") or []) and cr and cr >= nocrm_from:
                 nocrm.append({"id": str(t.get("id")), "g": group_id, "t": task_title(t.get("title") or "")[:160],
                               "m": str(t.get("createdBy") or ""), "mn": (t.get("creator") or {}).get("name") or "",
@@ -497,6 +572,7 @@ def collect(bx, now_ms):
     nocrm = []
     tasklist = []
     tasklist_from = now_ms - TASKLIST_DAYS * DAY_MS
+    bids, bids_from, finals = [], now_ms - BIDS_DAYS * DAY_MS, load_finals()
     torgs, torg_stat = match_group(TORG_GROUP_ID)
     calcs, calc_stat = match_group(CALC_GROUP_ID)
 
@@ -664,6 +740,8 @@ def collect(bx, now_ms):
         "nocrm": sorted(nocrm, key=lambda x: -x["cr"]),
         "nocrmFrom": nocrm_from,
         "tasks": sorted(tasklist, key=lambda x: -x[2]),
+        "bids": sorted(bids, key=lambda x: -x["ts"]),
+        "finalsUpdated": finals.get("updated"),
         "daily": daily,
         "depd": deposits_by_day(bx, now_ms, dep_stages, deals),
         "winDays": WIN_DAYS,
